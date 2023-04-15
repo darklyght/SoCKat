@@ -1,0 +1,20 @@
+# VSCode related
+.metals
+.vscode
+
+# cocotb related
+__pycache__
+.pytest_cache
+
+# SpinalHDL related
+hardware/spinal/target
+hardware/spinal/project
+hardware/src/hdl/*/*.v
+
+# Simulation related
+*.fst
+*.vcd
+*.gtkw
+*.o
+*.vpi
+*.vvp
