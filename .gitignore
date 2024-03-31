@@ -13,6 +13,11 @@ hardware/spinal/simWorkspace
 hardware/spinal/tmp
 hardware/src/hdl/*/*.v
 
+# Design related
+hardware/spinal/src/main/scala/ddr3/scripts/ddr3_parameter_generation
+hardware/spinal/src/main/scala/ddr3/scripts/ddr3_parameter_generation.v
+hardware/spinal/src/main/scala/ddr3/device_parameters.scala
+
 # Simulation related
 *.fst
 *.vcd

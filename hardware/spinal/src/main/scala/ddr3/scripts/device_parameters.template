@@ -1,0 +1,16 @@
+package sockat.ddr3
+
+import spinal.core._
+
+case class DDR3DeviceParameters (
+    density: String = "{{ density }}",
+    speedGrade: String = "{{ speed_grade }}",
+    width: String = "{{ width }}",
+    rank: String = "{{ rank }}"
+) {
+
+{% for parameter, info in parameters.items() %}
+    val {{ parameter }}: {{ info.unit }} = (density, speedGrade, width, rank) match {
+        {% for configuration, value in info.value.items() %}case {{ configuration }} => {% if info.unit != "Int" %}{{ info.unit }}({% endif %}{{ value }}{% if info.unit != "Int" %}){% endif %}{% endfor %}
+    }
+{% endfor %}}

@@ -15,8 +15,8 @@ case class DeviceCommand (
     val ras_n = UInt(1 bits)
     val cas_n = UInt(1 bits)
     val we_n = UInt(1 bits)
-    val ba = UInt(parameters.baWidth bits)
-    val addr = UInt(parameters.addrWidth bits)
+    val ba = UInt(parameters.device.BA_BITS bits)
+    val addr = UInt(parameters.device.ADDR_BITS bits)
 
     override def asMaster() = {
         out(ras_n)
@@ -36,9 +36,9 @@ case class Device (
     val cs_n = out UInt(1 bits)
     val command = master(DeviceCommand(parameters))
     val odt = out UInt(1 bits)
-    val dq = inout(Analog(UInt(parameters.dqWidth bits)))
-    val dm = inout(Analog(UInt(parameters.dmWidth bits)))
-    val dqs = inout(Analog(differential(UInt(parameters.dqsWidth bits))))
+    val dq = inout(Analog(UInt(parameters.device.DQ_BITS bits)))
+    val dm = inout(Analog(UInt(parameters.device.DM_BITS bits)))
+    val dqs = inout(Analog(differential(UInt(parameters.device.DQS_BITS bits))))
 }
 
 case class DeviceInternal (
@@ -50,9 +50,9 @@ case class DeviceInternal (
     val cs_n = UInt(1 bits)
     val command = DeviceCommand(parameters)
     val odt = UInt(1 bits)
-    val dq = TriStateArray(parameters.dqWidth bits)
-    val dm = TriStateArray(parameters.dmWidth bits)
-    val dqs = TriStateArray(parameters.dqsWidth bits)
+    val dq = TriStateArray(parameters.device.DQ_BITS bits)
+    val dm = TriStateArray(parameters.device.DM_BITS bits)
+    val dqs = TriStateArray(parameters.device.DQS_BITS bits)
 
     override def asMaster() = {
         out(rst_n)
@@ -83,19 +83,19 @@ case class IOCells (
     val cas_n = OBUF(OBUFParameters())
     val we_n = OBUF(OBUFParameters())
     val odt = OBUF(OBUFParameters())
-    val ba = Seq.fill(parameters.baWidth) {
+    val ba = Seq.fill(parameters.device.BA_BITS) {
         OBUF(OBUFParameters())
     }
-    val addr = Seq.fill(parameters.addrWidth) {
+    val addr = Seq.fill(parameters.device.ADDR_BITS) {
         OBUF(OBUFParameters())
     }
-    val dq = Seq.fill(parameters.dqWidth) {
+    val dq = Seq.fill(parameters.device.DQ_BITS) {
         IOBUF(IOBUFParameters())
     }
-    val dm = Seq.fill(parameters.dmWidth) {
+    val dm = Seq.fill(parameters.device.DM_BITS) {
         IOBUF(IOBUFParameters())
     }
-    val dqs = Seq.fill(parameters.dqsWidth) {
+    val dqs = Seq.fill(parameters.device.DQS_BITS) {
         IOBUFDS(IOBUFDSParameters())
     }
 
