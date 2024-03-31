@@ -24,7 +24,7 @@ case class UARTData (
 }
 
 case class UART (
-    parameters: UARTParameters,
+    parameters: UARTParameters
 ) extends Component {
     val io = new Bundle {
         val data = slave(UARTData())

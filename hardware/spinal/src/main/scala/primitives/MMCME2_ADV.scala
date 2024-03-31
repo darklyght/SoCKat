@@ -1,7 +1,7 @@
 package sockat.primitives
 
 import spinal.core._
-import spinal.lib.{master, slave, IMasterSlave}
+import spinal.lib._
 
 case class MMCME2_ADVParameters (
     bandwidth: String = "OPTIMIZED",
