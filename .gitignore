@@ -9,6 +9,8 @@ __pycache__
 # SpinalHDL related
 hardware/spinal/target
 hardware/spinal/project
+hardware/spinal/simWorkspace
+hardware/spinal/tmp
 hardware/src/hdl/*/*.v
 
 # Simulation related
