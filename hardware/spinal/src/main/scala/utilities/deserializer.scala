@@ -7,7 +7,7 @@ case class Deserializer[T <: Data] (
     width: Int,
     outputWidth: Int,
     resetFunction: T => Unit,
-    defaultFunction: T => Unit,
+    defaultFunction: T => Unit
 ) extends Component {
     val io = new Bundle {
         val load = in Bool()

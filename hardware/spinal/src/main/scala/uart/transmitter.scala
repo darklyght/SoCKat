@@ -1,12 +1,15 @@
 package sockat.uart
 
 import spinal.core._
-import spinal.lib.{Stream, Flow, master, slave}
+import spinal.lib._
+import spinal.core.sim._
 
-import sockat.utilities.{Serializer}
+import scala.collection.mutable.Queue
+
+import sockat.utilities._
 
 case class Transmitter (
-    parameters: UARTParameters,
+    parameters: UARTParameters
 ) extends Component {
     val io = new Bundle {
         val serial = out UInt(1 bits) addTag(crossClockDomain)
@@ -65,19 +68,92 @@ case class Transmitter (
     io.serial := serializer.io.output
 }
 
-object TransmitterV {
+object TransmitterVerilog {
     def main(
         args: Array[String]
     ) = {
-        val TransmitterV = SpinalConfig(
+        val compiled = SpinalConfig(
             mode = Verilog,
             targetDirectory = "../src/hdl/uart/",
             dumpWave = DumpWaveConfig(
                 depth = 0,
                 vcdPath = "wave.fst"
-            ),
+            )
         ).generate(
-            Transmitter(UARTParameters()),
+            Transmitter(
+                UARTParameters()
+            )
         )
+    }
+}
+
+object TransmitterSimulation {
+    def test(
+        dut: Transmitter
+    ) = {
+        def driver(
+            dut: Transmitter,
+            queue: Queue[Int]
+        ) = {
+            while (true) {
+                dut.io.data.valid.randomize()
+                dut.io.data.payload.randomize()
+                dut.clockDomain.waitSampling()
+                
+                if (dut.io.data.valid.toBoolean && dut.io.data.ready.toBoolean) {
+                    queue.enqueue(dut.io.data.payload.toInt)
+                }
+            }
+        }
+
+        def monitor(
+            dut: Transmitter,
+            queue: Queue[Int]
+        ) = {
+            val baudPeriod = dut.parameters.clockFrequency / dut.parameters.baudRate
+
+            waitUntil(dut.io.serial.toInt.toBoolean == true)
+
+            while (true) {
+                waitUntil(dut.io.serial.toInt.toBoolean == false)
+                dut.clockDomain.waitSampling(baudPeriod / 2)
+
+                assert(dut.io.serial.toInt.toBoolean == false)
+                dut.clockDomain.waitSampling(baudPeriod)
+
+                var buffer = 0
+                for (bit <- 0 to 7) {
+                    buffer = buffer | (dut.io.serial.toInt << bit)
+                    dut.clockDomain.waitSampling(baudPeriod)
+                }
+
+                assert(dut.io.serial.toInt.toBoolean == true)
+                assert(buffer == queue.dequeue())
+            }
+        }
+
+        val queue = Queue[Int]()
+
+        dut.clockDomain.forkStimulus(frequency = HertzNumber(dut.parameters.clockFrequency))
+        val driverThread = fork(driver(dut, queue))
+        val monitorThread = fork(monitor(dut, queue))
+
+        dut.clockDomain.waitSampling(10000)
+    }
+
+    def main(
+        args: Array[String]
+    ) = {
+        val compiled = SimConfig.withIVerilog
+                                .withFstWave
+                                .compile(
+                                    Transmitter(
+                                        UARTParameters(
+                                            baudRate = 7372800
+                                        )
+                                    )
+                                )
+
+        compiled.doSim(dut => test(dut))
     }
 }

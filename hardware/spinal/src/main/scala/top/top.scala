@@ -2,11 +2,11 @@ package sockat.top
 
 import spinal.core._
 
-import sockat.primitives.{MMCME2_ADV, MMCME2_ADVParameters}
-import sockat.uart.{UART, UARTParameters, UARTSerial}
+import sockat.primitives._
+import sockat.uart._
 
 case class Top (
-    parameters: TopParameters,
+    parameters: TopParameters
 ) extends Component {
     val io = new Bundle {
         val uart = UARTSerial()
@@ -17,8 +17,8 @@ case class Top (
             clkIn1Period = 1e9 / parameters.clockFrequency,
             divClkDivide = 9,
             clkFbOutMultF = 62.375,
-            clkOut0DivideF = 5.875,
-        ),
+            clkOut0DivideF = 5.875
+        )
     )
 
     uartClock.noPhaseShift()
@@ -40,13 +40,13 @@ case class Top (
             clockEdge = RISING,
             resetKind = ASYNC,
             resetActiveLevel = HIGH,
-            clockEnableActiveLevel = HIGH,
-        ),
+            clockEnableActiveLevel = HIGH
+        )
     )
 
     val uartClockArea = new ClockingArea(uartClockDomain) {
         val uart = UART(
-            parameters = parameters.uartParameters,
+            parameters = parameters.uartParameters
         )
 
         uart.io.data.transmit <-/< uart.io.data.receive
@@ -55,19 +55,19 @@ case class Top (
     io.uart <> uartClockArea.uart.io.serial
 }
 
-object TopV {
+object TopVerilog {
     def main(
         args: Array[String]
     ) = {
-        val TopV = SpinalConfig(
+        val compiled = SpinalConfig(
             mode = Verilog,
             targetDirectory = "../src/hdl/top/",
             dumpWave = DumpWaveConfig(
                 depth = 0,
                 vcdPath = "wave.fst"
-            ),
+            )
         ).generate(
-            Top(TopParameters()),
+            Top(TopParameters())
         )
     }
 }

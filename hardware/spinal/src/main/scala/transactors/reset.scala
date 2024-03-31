@@ -2,12 +2,12 @@ package sockat.transactors
 
 import spinal.core._
 
-case class ResetParameters (
-    cycles: Int = 10,
+case class SimulationResetParameters (
+    cycles: Int = 10
 )
 
-case class Reset (
-    parameters: ResetParameters,
+case class SimulationReset (
+    parameters: SimulationResetParameters
 ) extends BlackBox {
     addGeneric("CYCLES", parameters.cycles)
 

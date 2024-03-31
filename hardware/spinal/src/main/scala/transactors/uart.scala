@@ -2,15 +2,15 @@ package sockat.transactors
 
 import spinal.core._
 
-import spinal.lib.{master}
-import sockat.uart.{UART, UARTData, UARTSerial, UARTParameters}
+import spinal.lib._
+import sockat.uart._
 
 case class UARTVPIParameters (
     name: String = "uart",
 )
 
 case class UARTVPI (
-    parameters: UARTVPIParameters,
+    parameters: UARTVPIParameters
 ) extends BlackBox {
     addGeneric("NAME", parameters.name)
 
@@ -19,7 +19,7 @@ case class UARTVPI (
         val data = master(UARTData())
     }
 
-    private def renameIO(): Unit = {
+    private def renameIO() = {
         io.flatten.foreach(bt => {
             if (bt.getName().contains("data_")) bt.setName(bt.getName().replace("data_", ""))
             if (bt.getName().contains("_payload")) bt.setName(bt.getName().replace("_payload", "_data"))
@@ -35,11 +35,11 @@ case class UARTVPI (
 
 case class UARTTransactorParameters (
     vpiParameters: UARTVPIParameters,
-    uartParameters: UARTParameters,
+    uartParameters: UARTParameters
 )
 
 case class UARTTransactor (
-    parameters: UARTTransactorParameters,
+    parameters: UARTTransactorParameters
 ) extends Component {
     val io = new Bundle {
         val serial = UARTSerial()

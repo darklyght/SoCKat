@@ -115,7 +115,7 @@ case class MMCME2_ADV (
         val locked = out Bool()
     }
 
-    private def renameIO(): Unit = {
+    private def renameIO() = {
         io.flatten.foreach(bt => {
             if (bt.getName().contains("dynamicReconfiguration_")) bt.setName(bt.getName().replace("dynamicReconfiguration_", "D"))
             if (bt.getName().contains("phaseShift_")) bt.setName(bt.getName().replace("phaseShift_", "PS"))
@@ -138,13 +138,13 @@ case class MMCME2_ADV (
         }
     }
 
-    def noPhaseShift(): Unit = {
+    def noPhaseShift() = {
         io.phaseShift.clk := False
         io.phaseShift.en := False
         io.phaseShift.incdec := False
     }
 
-    def noDynamicReconfiguration(): Unit = {
+    def noDynamicReconfiguration() = {
         io.dynamicReconfiguration.addr := 0
         io.dynamicReconfiguration.i := 0
         io.dynamicReconfiguration.we := False
@@ -164,7 +164,7 @@ case class PhaseShiftInterface(
     val incdec = Bool()
     val done = Bool()
 
-    override def asMaster(): Unit = {
+    override def asMaster() = {
         out(clk)
         out(en)
         out(incdec)
@@ -182,7 +182,7 @@ case class DynamicReconfigurationInterface(
     val o = out UInt(16 bits)
     val rdy = out Bool()
 
-    override def asMaster(): Unit = {
+    override def asMaster() = {
         out(addr)
         out(i)
         out(we)

@@ -2,41 +2,28 @@ package sockat.top
 
 import spinal.core._
 
-import sockat.transactors.{
-    Clock,
-    ClockParameters,
-    Reset,
-    ResetParameters,
-    UARTTransactor,
-    UARTTransactorParameters,
-    UARTVPI,
-    UARTVPIParameters
-}
-import sockat.uart.{
-    UART,
-    UARTParameters,
-    UARTSerial
-}
+import sockat.transactors._
+import sockat.uart._
 
 case class Simulation (
 ) extends Component {
-    val topClock = Clock(
-        parameters = ClockParameters(
+    val topClock = SimulationClock(
+        parameters = SimulationClockParameters(
             period = 10,
-            phase = 0,
+            phase = 0
         )
     )
 
-    val uartClock = Clock(
-        parameters = ClockParameters(
+    val uartClock = SimulationClock(
+        parameters = SimulationClockParameters(
             period = 8.477,
-            phase = 0,
+            phase = 0
         )
     )
 
-    val reset = Reset(
-        parameters = ResetParameters(
-            cycles = 100,
+    val reset = SimulationReset(
+        parameters = SimulationResetParameters(
+            cycles = 100
         )
     )
 
@@ -49,8 +36,8 @@ case class Simulation (
             clockEdge = RISING,
             resetKind = ASYNC,
             resetActiveLevel = HIGH,
-            clockEnableActiveLevel = HIGH,
-        ),
+            clockEnableActiveLevel = HIGH
+        )
     )
 
     val uartClockDomain = ClockDomain(
@@ -60,8 +47,8 @@ case class Simulation (
             clockEdge = RISING,
             resetKind = ASYNC,
             resetActiveLevel = HIGH,
-            clockEnableActiveLevel = HIGH,
-        ),
+            clockEnableActiveLevel = HIGH
+        )
     )
 
     val topClockArea = new ClockingArea(topClockDomain) {
@@ -70,9 +57,9 @@ case class Simulation (
                 clockFrequency = 100000000,
                 uartParameters = UARTParameters(
                     clockFrequency = 117964800,
-                    baudRate = 7372800,
+                    baudRate = 7372800
                 )
-            ),
+            )
         )
     }
 
@@ -80,13 +67,13 @@ case class Simulation (
         val uartTransactor = UARTTransactor(
             parameters = UARTTransactorParameters(
                 vpiParameters = UARTVPIParameters(
-                    name = "uart0",
+                    name = "uart0"
                 ),
                 uartParameters = UARTParameters(
                     clockFrequency = 117964800,
-                    baudRate = 7372800,
-                ),
-            ),
+                    baudRate = 7372800
+                )
+            )
         )
     }
 
@@ -94,19 +81,19 @@ case class Simulation (
     topClockArea.top.io.uart.receive <> uartClockArea.uartTransactor.io.serial.transmit
 }
 
-object SimulationV {
+object SimulationVerilog {
     def main(
         args: Array[String]
     ) = {
-        val SimulationV = SpinalConfig(
+        val compiled = SpinalConfig(
             mode = Verilog,
             targetDirectory = "../src/hdl/top/",
             dumpWave = DumpWaveConfig(
                 depth = 0,
                 vcdPath = "wave.fst"
-            ),
+            )
         ).generate(
-            Simulation(),
+            Simulation()
         )
     }
 }

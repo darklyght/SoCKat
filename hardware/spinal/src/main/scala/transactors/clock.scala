@@ -2,13 +2,13 @@ package sockat.transactors
 
 import spinal.core._
 
-case class ClockParameters (
+case class SimulationClockParameters (
     period: Double = 10,
-    phase: Int = 0,
+    phase: Int = 0
 )
 
-case class Clock (
-    parameters: ClockParameters,
+case class SimulationClock (
+    parameters: SimulationClockParameters
 ) extends BlackBox {
     addGeneric("PERIOD", parameters.period)
     addGeneric("PHASE", parameters.phase)

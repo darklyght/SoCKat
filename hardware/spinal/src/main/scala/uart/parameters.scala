@@ -4,5 +4,5 @@ import spinal.core._
 
 case class UARTParameters (
     clockFrequency: Int = 117964800,
-    baudRate: Int = 115200,
+    baudRate: Int = 115200
 )
