@@ -15,9 +15,9 @@ case class OBUFDS (
     addGeneric("SLEW", parameters.slew)
 
     val io = new Bundle {
-        val o = out UInt(1 bits)
-        val ob = out UInt(1 bits)
-        val i = in UInt(1 bits)
+        val o = out Bool()
+        val ob = out Bool()
+        val i = in Bool()
     }
 
     addRTLPath("../sim/lib/XilinxUnisimLibrary/verilog/src/glbl.v")
