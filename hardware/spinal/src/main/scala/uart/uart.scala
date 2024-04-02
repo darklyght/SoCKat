@@ -8,8 +8,8 @@ import scala.collection.mutable.Queue
 
 case class UARTSerial (
 ) extends Bundle {
-    val transmit = out UInt(1 bits)
-    val receive = in UInt(1 bits)
+    val transmit = out Bool()
+    val receive = in Bool()
 }
 
 case class UARTData (
@@ -67,7 +67,7 @@ object UARTSimulation {
             queue: Queue[Int]
         ) = {
             while (true) {
-                dut.io.serial.receive #= dut.io.serial.transmit.toInt
+                dut.io.serial.receive #= dut.io.serial.transmit.toBoolean
 
                 dut.io.data.transmit.valid.randomize()
                 dut.io.data.transmit.payload.randomize()

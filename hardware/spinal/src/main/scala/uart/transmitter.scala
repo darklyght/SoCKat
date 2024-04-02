@@ -12,7 +12,7 @@ case class Transmitter (
     parameters: UARTParameters
 ) extends Component {
     val io = new Bundle {
-        val serial = out UInt(1 bits) addTag(crossClockDomain)
+        val serial = out Bool()
         val data = slave Stream(UInt(8 bits))
     }
 
@@ -22,16 +22,18 @@ case class Transmitter (
     val bitCounter = Reg(UInt(counterWidth bits)) init(0)
     val byteCounter = Reg(UInt(4 bits)) init(0)
 
-    val serializer = Serializer(
-        dataType = UInt(1 bits),
-        width = 9,
-        inputWidth = 9,
-        resetFunction = (register: UInt) => {
-            register init(1)
-        },
-        defaultFunction = (register: UInt) => {
-            register := 1
-        }
+    val serializer = ShiftRegister(
+        ShiftRegisterParameters(
+            dataType = Bool(),
+            width = 9,
+            inputWidth = 9,
+            resetFunction = (register: Bool) => {
+                register init(True)
+            },
+            defaultFunction = (register: Bool) => {
+                register := True
+            }
+        )
     )
 
     val sample = bitCounter === bitCount - 1
@@ -53,19 +55,19 @@ case class Transmitter (
     serializer.io.load := start
     serializer.io.shift := started && sample
     serializer.io.input := Vec(
-        0,
-        io.data.payload(0 downto 0),
-        io.data.payload(1 downto 1),
-        io.data.payload(2 downto 2),
-        io.data.payload(3 downto 3),
-        io.data.payload(4 downto 4),
-        io.data.payload(5 downto 5),
-        io.data.payload(6 downto 6),
-        io.data.payload(7 downto 7),
+        False,
+        io.data.payload(0 downto 0).asBool,
+        io.data.payload(1 downto 1).asBool,
+        io.data.payload(2 downto 2).asBool,
+        io.data.payload(3 downto 3).asBool,
+        io.data.payload(4 downto 4).asBool,
+        io.data.payload(5 downto 5).asBool,
+        io.data.payload(6 downto 6).asBool,
+        io.data.payload(7 downto 7).asBool,
     )
 
     io.data.ready := ~started
-    io.serial := serializer.io.output
+    io.serial := serializer.io.output(0)
 }
 
 object TransmitterVerilog {
@@ -112,22 +114,22 @@ object TransmitterSimulation {
         ) = {
             val baudPeriod = dut.parameters.clockFrequency / dut.parameters.baudRate
 
-            waitUntil(dut.io.serial.toInt.toBoolean == true)
+            waitUntil(dut.io.serial.toBoolean == true)
 
             while (true) {
-                waitUntil(dut.io.serial.toInt.toBoolean == false)
+                waitUntil(dut.io.serial.toBoolean == false)
                 dut.clockDomain.waitSampling(baudPeriod / 2)
 
-                assert(dut.io.serial.toInt.toBoolean == false)
+                assert(dut.io.serial.toBoolean == false)
                 dut.clockDomain.waitSampling(baudPeriod)
 
                 var buffer = 0
                 for (bit <- 0 to 7) {
-                    buffer = buffer | (dut.io.serial.toInt << bit)
+                    buffer = buffer | (dut.io.serial.toBoolean.toInt << bit)
                     dut.clockDomain.waitSampling(baudPeriod)
                 }
 
-                assert(dut.io.serial.toInt.toBoolean == true)
+                assert(dut.io.serial.toBoolean == true)
                 assert(buffer == queue.dequeue())
             }
         }

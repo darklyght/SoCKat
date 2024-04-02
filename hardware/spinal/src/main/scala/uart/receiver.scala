@@ -14,7 +14,7 @@ case class Receiver (
 ) extends Component {
     val io = new Bundle {
         val data = master Flow(UInt(8 bits))
-        val serial = in UInt(1 bits) addTag(crossClockDomain)
+        val serial = in Bool() addTag(crossClockDomain)
     }
 
     val bitCount = parameters.clockFrequency / parameters.baudRate
@@ -23,22 +23,24 @@ case class Receiver (
     val bitCounter = Reg(UInt(counterWidth bits)) init(0)
     val byteCounter = Reg(UInt(4 bits)) init(0)
 
-    val deserializer = Deserializer(
-        dataType = UInt(1 bits),
-        width = 8,
-        outputWidth = 8,
-        resetFunction = (register: UInt) => {
-            register init(0)
-        },
-        defaultFunction = (register: UInt) => {
-            register := 0
-        }
+    val deserializer = ShiftRegister(
+        ShiftRegisterParameters(
+            dataType = Bool(),
+            width = 8,
+            outputWidth = 8,
+            resetFunction = (register: Bool) => {
+                register init(False)
+            },
+            defaultFunction = (register: Bool) => {
+                register := False
+            }
+        )
     )
  
     val bit = bitCounter === bitCount - 1
     val sample = bitCounter === bitCount / 2
     val started = byteCounter =/= 0
-    val start = ((byteCounter === 1 && bitCounter === U(bitCounter.range -> true)) || ~started) && io.serial === 0
+    val start = ((byteCounter === 1 && bitCounter === U(bitCounter.range -> true)) || ~started) && ~io.serial
 
     when (start || bit) {
         bitCounter := 0
@@ -54,10 +56,10 @@ case class Receiver (
 
     deserializer.io.load := sample && started
     deserializer.io.shift := sample && started
-    deserializer.io.input := io.serial
+    deserializer.io.input := Vec(io.serial)
 
     io.data.payload := deserializer.io.output.asBits.asUInt
-    io.data.valid := byteCounter === 1 && sample && io.serial === 1
+    io.data.valid := byteCounter === 1 && sample && io.serial
 }
 
 object ReceiverVerilog {
@@ -92,15 +94,15 @@ object ReceiverSimulation {
                 var buffer = rand.nextInt(256)
                 queue.enqueue(buffer)
 
-                dut.io.serial #= 0
+                dut.io.serial #= false
                 dut.clockDomain.waitSampling(baudPeriod)
 
                 for (bit <- 0 to 7) {
-                    dut.io.serial #= ((buffer >> bit) & 1)
+                    dut.io.serial #= ((buffer >> bit) & 1) == 1
                     dut.clockDomain.waitSampling(baudPeriod)
                 }
 
-                dut.io.serial #= 1
+                dut.io.serial #= true
                 dut.clockDomain.waitSampling(baudPeriod)
             }
         }
