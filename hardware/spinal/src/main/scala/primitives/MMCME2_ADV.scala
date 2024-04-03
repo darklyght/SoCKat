@@ -94,7 +94,7 @@ case class MMCME2_ADV (
         val clkFbIn = in Bool()
         val clkInSel = in UInt(1 bits)
         val rst = in Bool()
-        val pwrDwn  = in Bool()
+        val pwrDwn = in Bool()
         val dynamicReconfiguration = slave(DynamicReconfigurationInterface())
         val phaseShift = slave(PhaseShiftInterface())
         val clkOut0 = out Bool()
@@ -114,6 +114,9 @@ case class MMCME2_ADV (
         val clkFbStopped = out Bool()
         val locked = out Bool()
     }
+
+    addRTLPath("../sim/lib/XilinxUnisimLibrary/verilog/src/glbl.v")
+    addRTLPath("../sim/lib/XilinxUnisimLibrary/verilog/src/unisims/MMCME2_ADV.v")
 
     private def renameIO() = {
         io.flatten.foreach(bt => {
