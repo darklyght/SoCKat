@@ -8,13 +8,7 @@ import spinal.lib.fsm._
 import sockat.primitives._
 
 case class ClockGeneratorParameters (
-    mmcm: MMCME2_ADVParameters = MMCME2_ADVParameters(
-        clkIn1Period = 5,
-        clkFbOutMultF = 8,
-        clkOut0DivideF = 2,
-        clkOut1Divide = 2,
-        divClkDivide = 2
-    )
+    mmcm: MMCME2_ADVParameters = MMCME2_ADVParameters()
 )
 
 case class PhaseUpdateInterface (
@@ -286,7 +280,15 @@ object ClockGeneratorSimulation {
                                 .addSimulatorFlag("-g2012")
                                 .addSimulatorFlag("-s glbl")
                                 .compile(
-                                    ClockGenerator(ClockGeneratorParameters())
+                                    ClockGenerator(ClockGeneratorParameters(
+                                        mmcm = MMCME2_ADVParameters(
+                                            clkIn1Period = 5,
+                                            clkFbOutMultF = 8,
+                                            clkOut0DivideF = 2,
+                                            clkOut1Divide = 2,
+                                            divClkDivide = 2
+                                        )
+                                    ))
                                 )
 
         compiled.doSim(dut => test(dut))

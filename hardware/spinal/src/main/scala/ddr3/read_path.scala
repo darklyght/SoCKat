@@ -14,13 +14,11 @@ import scala.util.Random
 case class ReadPathInterface (
     parameters: DDR3Parameters
 ) extends Bundle with IMasterSlave {
-    val controllerClock = Bool()
     val readToggle = Bool()
     val readData = UInt(parameters.burstLength * parameters.device.DQ_BITS bits)
     val readValidToggle = Bool()
 
     override def asMaster() = {
-        out(controllerClock)
         out(readToggle)
         in(readData)
         in(readValidToggle)
@@ -31,6 +29,7 @@ case class ReadPath (
     parameters: DDR3Parameters
 ) extends Component {
     val io = new Bundle {
+        val controllerClock = in Bool()
         val device = master(DeviceInternal(parameters))
         val internal = slave(ReadPathInterface(parameters))
     }
@@ -188,7 +187,7 @@ case class ReadPath (
     }
 
     val controllerClockDomain = ClockDomain(
-        clock = io.internal.controllerClock,
+        clock = io.controllerClock,
         reset = ClockDomain.current.readResetWire,
         config = ClockDomainConfig(
             clockEdge = RISING,
@@ -311,7 +310,7 @@ object ReadPathSimulation {
         dut.clockDomain.forkStimulus(frequency = HertzNumber(400000000))
         dut.clockDomain.waitRisingEdge()
         sleep(1875)
-        val controllerClock = ClockDomain(dut.io.internal.controllerClock)
+        val controllerClock = ClockDomain(dut.io.controllerClock)
         controllerClock.forkStimulus(frequency = HertzNumber(200000000))
 
         dut.io.device.dq.read #= 0

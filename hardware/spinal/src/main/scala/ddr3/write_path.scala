@@ -14,7 +14,6 @@ import scala.util.Random
 case class WritePathInterface (
     parameters: DDR3Parameters
 ) extends Bundle with IMasterSlave {
-    val dqsClock = Vec.fill(parameters.device.DQS_BITS)(Bool())
     val cke = Bool()
     val cs_n = Bool()
     val odt = Bool()
@@ -25,9 +24,9 @@ case class WritePathInterface (
     val writeMask = UInt(parameters.burstLength * parameters.device.DM_BITS bits)
     val writeLevelingEnable = Bool()
     val writeLevelingToggle = Bool()
+    val writeLevelingData = UInt(parameters.device.DQ_BITS bits)
 
     override def asMaster() = {
-        out(dqsClock)
         out(cke)
         out(cs_n)
         out(odt)
@@ -38,6 +37,7 @@ case class WritePathInterface (
         out(writeMask)
         out(writeLevelingEnable)
         out(writeLevelingToggle)
+        in(writeLevelingData)
     }
 }
 
@@ -45,6 +45,7 @@ case class WritePath (
     parameters: DDR3Parameters
 ) extends Component {
     val io = new Bundle {
+        val dqsClock = in(Vec.fill(parameters.device.DQS_BITS)(Bool()))
         val device = master(DeviceInternal(parameters))
         val internal = slave(WritePathInterface(parameters))
     }
@@ -158,8 +159,8 @@ case class WritePath (
     val odtSerializer = ShiftRegister(
         ShiftRegisterParameters(
             dataType = Bool(),
-            width = odth.tCKCycles(parameters.tCK),
-            inputWidth = odth.tCKCycles(parameters.tCK),
+            width = odth.tCKCycles(parameters.tCKPeriod),
+            inputWidth = odth.tCKCycles(parameters.tCKPeriod),
             resetFunction = (register: Bool) => {
                 register init(False)
             },
@@ -311,7 +312,7 @@ case class WritePath (
 
     odtSerializer.io.load := odtSync(0) | writeToggleSync(0)
     odtSerializer.io.shift := True
-    odtSerializer.io.input := Vec(True, odth.tCKCycles(parameters.tCK))
+    odtSerializer.io.input := Vec(True, odth.tCKCycles(parameters.tCKPeriod))
 
     dqEnableSerializer.io.load := writeToggleSync(0)
     dqEnableSerializer.io.shift := True
@@ -426,6 +427,7 @@ case class WritePath (
         oddr.io.s := False
         io.device.dq.write(index) := oddr.io.q
         io.device.dq.writeEnable(index) := dqEnableSerializer.io.output(0)
+        io.internal.writeLevelingData(index) := io.device.dq.read(index)
     }})
     
     dmOddr.zipWithIndex.foreach({case (oddr, index) => {
@@ -439,7 +441,7 @@ case class WritePath (
         io.device.dm.writeEnable(index) := dqEnableSerializer.io.output(0)
     }})
 
-    io.internal.dqsClock.zipWithIndex.foreach({case (clock, index) => {
+    io.dqsClock.zipWithIndex.foreach({case (clock, index) => {
         val dqsClockDomain = ClockDomain(
             clock = clock,
             reset = ClockDomain.current.readResetWire,
@@ -633,7 +635,7 @@ object WritePathSimulation {
 
         dut.clockDomain.forkStimulus(frequency = HertzNumber(400000000))
         dut.clockDomain.waitRisingEdge()
-        val dqsClocks = dut.io.internal.dqsClock.map(clock => {
+        val dqsClocks = dut.io.dqsClock.map(clock => {
             ClockDomain(clock)
         })
         sleep(625)

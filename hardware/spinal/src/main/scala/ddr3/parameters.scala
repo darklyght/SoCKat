@@ -7,7 +7,7 @@ case class DDR3Parameters (
     speedGrade: String = "sg187E",
     width: String = "x16",
     rank: String = "SINGLE_RANK",
-    tCK: Int = 5,
+    tCKPeriod: Double = 2.5,
     burstLength: Int = 8,
     writeLatency: Int = 5,
     readLatency: Int = 6
@@ -23,11 +23,11 @@ case class DDR3Parameters (
 case class ps (
     value: Double
 ) {
-    def tCKCycles(tCK: Int) = Math.ceil(value / (tCK * 1000.0)).toInt
+    def tCKCycles(tCKPeriod: Double) = Math.ceil(value / (tCKPeriod * 1000.0)).toInt
 }
 
 case class tCK (
     value: Double
 ) {
-    def tCKCycles(tCK: Int) = Math.ceil(value).toInt
+    def tCKCycles(tCKPeriod: Double) = Math.ceil(value).toInt
 }
