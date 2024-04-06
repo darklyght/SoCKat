@@ -10,7 +10,7 @@ case class DDR3DeviceParameters (
 ) {
 
 {% for parameter, info in parameters.items() %}
-    val {{ parameter }}: {{ info.unit }} = (density, speedGrade, width, rank) match {
-        {% for configuration, value in info.value.items() %}case {{ configuration }} => {% if info.unit != "Int" %}{{ info.unit }}({% endif %}{{ value }}{% if info.unit != "Int" %}){% endif %}{% endfor %}
+    val {{ parameter }}: {% if info.unit != "Int" %}{{ info.unit.upper() }}{% else %}{{ info.unit }}{% endif %} = (density, speedGrade, width, rank) match {
+        {% for configuration, value in info.value.items() %}case {{ configuration }} => {% if info.unit != "Int" %}{{ info.unit.upper() }}({% endif %}{{ value }}{% if info.unit != "Int" %}){% endif %}{% endfor %}
     }
 {% endfor %}}

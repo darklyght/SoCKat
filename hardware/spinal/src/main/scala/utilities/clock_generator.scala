@@ -85,7 +85,7 @@ case class ClockGenerator (
         mmcm.io.dynamicReconfiguration.en := False
         io.phaseUpdate.ready := False
 
-        val sReset = new State with EntryPoint
+        val sReset = makeInstantEntry()
         val sInitialize = new State
         val sInitializeWait = new State
         val sWaitLocked = new State
@@ -94,7 +94,7 @@ case class ClockGenerator (
         val sWrite = new State
         val sWriteWait = new State
         val sReady = new State
-        
+
         sReset
             .onEntry()
             .whenIsActive({
@@ -105,7 +105,6 @@ case class ClockGenerator (
                 })
                 goto(sWaitLocked)
             })
-            .onExit()
 
         sInitialize
             .onEntry()
@@ -113,7 +112,6 @@ case class ClockGenerator (
                 mmcm.io.dynamicReconfiguration.addr := addresses(clock)(clockRegister)
                 mmcm.io.dynamicReconfiguration.en := True
             })
-            .onExit()
 
         sInitializeWait
             .onEntry()
@@ -144,7 +142,6 @@ case class ClockGenerator (
                     }
                 }
             })
-            .onExit()
 
         sWaitLocked
             .onEntry()
@@ -154,7 +151,6 @@ case class ClockGenerator (
                     goto(sReady)
                 }
             })
-            .onExit()
 
         sRead
             .onEntry()
@@ -168,7 +164,6 @@ case class ClockGenerator (
                 }
                 goto(sReadWait)
             })
-            .onExit()
 
         sReadWait
             .onEntry()
@@ -178,7 +173,6 @@ case class ClockGenerator (
                     goto(sWrite)
                 }
             })
-            .onExit()
 
         sWrite
             .onEntry()
@@ -195,7 +189,6 @@ case class ClockGenerator (
                 }
                 goto(sWriteWait)
             })
-            .onExit()
 
         sWriteWait
             .onEntry()
@@ -210,7 +203,6 @@ case class ClockGenerator (
                     }
                 }
             })
-            .onExit()
 
         sReady
             .onEntry()
@@ -224,7 +216,6 @@ case class ClockGenerator (
                     goto(sRead)
                 }
             })
-            .onExit()
     }
 }
 

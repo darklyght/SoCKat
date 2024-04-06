@@ -7,13 +7,13 @@ case class MR0 (
     burstLength: BurstLength = BurstLength("Fixed BL8"),
     casLatency: CASLatency = CASLatency(6),
     readBurstType: ReadBurstType = ReadBurstType("Sequential"),
-    dllReset: DLLReset = DLLReset("No"),
+    dllReset: DLLReset = DLLReset("Yes"),
     writeRecovery: WriteRecovery = WriteRecovery(6),
     prechargePD: PrechargePD = PrechargePD("Off")
 ) extends ModeRegister {
     override val index = 0
 
-    def value = Cat(
+    override def asUInt = Cat(
         U"1'b0",
         register,
         U"1'b0",
@@ -39,7 +39,7 @@ case class MR1 (
 ) extends ModeRegister {
     override val index = 1
 
-    def value = Cat(
+    override def asUInt = Cat(
         U"1'b0",
         register,
         U"1'b0",
@@ -66,7 +66,7 @@ case class MR2 (
 ) extends ModeRegister {
     override val index = 2
 
-    def value = Cat(
+    override def asUInt = Cat(
         U"1'b0",
         register,
         U"3'b000",
@@ -85,13 +85,13 @@ case class MR3 (
 ) extends ModeRegister {
     override val index = 3
 
-    def value = Cat(
+    override def asUInt = Cat(
         U"1'b0",
         register,
         U"11'b00000000000",
         mprEnable.asUInt,
         mprReadFunction.asUInt
-    )
+    ).asUInt
 }
 
 case class BurstLength (
@@ -296,6 +296,8 @@ abstract class ModeRegister (
     def register = {
         U(index, 2 bits)
     }
+
+    def asUInt: UInt
 }
 
 abstract class ModeRegisterField (

@@ -69,7 +69,7 @@ case class ReadPath (
     val readValidSerializer = ShiftRegister(
         ShiftRegisterParameters(
             dataType = Bool(),
-            width = parameters.readLatency + parameters.burstLength / 2 + 3,
+            width = parameters.readLatency + parameters.additiveLatency + parameters.burstLength / 2 + 3,
             inputWidth = 1,
             resetFunction = (register: Bool) => {
                 register init(False)
@@ -83,7 +83,7 @@ case class ReadPath (
     val loadSerializer = ShiftRegister(
         ShiftRegisterParameters(
             dataType = Bool(),
-            width = parameters.readLatency + parameters.burstLength / 2 + 2,
+            width = parameters.readLatency + parameters.additiveLatency + parameters.burstLength / 2 + 2,
             inputWidth = parameters.burstLength / 2,
             resetFunction = (register: Bool) => {
                 register init(False)
@@ -97,7 +97,7 @@ case class ReadPath (
     val shiftSerializer = ShiftRegister(
         ShiftRegisterParameters(
             dataType = Bool(),
-            width = parameters.readLatency + parameters.burstLength / 2 + 2,
+            width = parameters.readLatency + parameters.additiveLatency + parameters.burstLength / 2 + 2,
             inputWidth = parameters.burstLength / 2 - 1,
             resetFunction = (register: Bool) => {
                 register init(False)
@@ -252,7 +252,7 @@ object ReadPathSimulation {
                 val readToggle = dut.io.internal.readToggle.toBoolean
                 waitUntil(dut.io.internal.readToggle.toBoolean != readToggle)
                 dut.clockDomain.waitRisingEdge(4)
-                dut.clockDomain.waitRisingEdge(dut.parameters.readLatency)
+                dut.clockDomain.waitRisingEdge(dut.parameters.readLatency + dut.parameters.additiveLatency)
                 dut.clockDomain.waitFallingEdge()
                 sleep(625)
 
@@ -328,7 +328,7 @@ object ReadPathSimulation {
     def main(
         args: Array[String]
     ) = {
-        val burstLengths = Seq(4, 6, 8)
+        val burstLengths = Seq(4, 8)
         val readLatencies = Seq(4, 5, 6 ,7 ,8, 9, 10, 11, 12, 13)
 
         val tests = for {

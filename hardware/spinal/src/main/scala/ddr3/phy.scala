@@ -122,7 +122,7 @@ case class PHY (
     writeClockArea.writePath.io.internal <> io.internal.write
 
     ioCells.io.internal.ck := clockGenerator.io.clkOut0
-    ioCells.io.internal.rst_n := io.internal.deviceReset
+    ioCells.io.internal.rst_n := ~io.internal.deviceReset
     ioCells.io.device <> io.device
 
     io.internal.ready := clockGenerator.io.locked

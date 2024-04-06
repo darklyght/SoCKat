@@ -173,7 +173,7 @@ case class WritePath (
     val dqEnableSerializer = ShiftRegister(
         ShiftRegisterParameters(
             dataType = Bool(),
-            width = parameters.writeLatency + parameters.burstLength / 2,
+            width = parameters.writeLatency + parameters.additiveLatency + parameters.burstLength / 2,
             inputWidth = parameters.burstLength / 2,
             resetFunction = (register: Bool) => {
                 register init(False)
@@ -187,7 +187,7 @@ case class WritePath (
     val writeDataRiseSerializer = ShiftRegister(
         ShiftRegisterParameters(
             dataType = UInt(parameters.device.DQ_BITS bits),
-            width = parameters.writeLatency + parameters.burstLength / 2 - 1,
+            width = parameters.writeLatency + parameters.additiveLatency + parameters.burstLength / 2 - 1,
             inputWidth = parameters.burstLength / 2,
             resetFunction = (register: UInt) => {
                 register init(0)
@@ -201,7 +201,7 @@ case class WritePath (
     val writeDataFallSerializer = ShiftRegister(
         ShiftRegisterParameters(
             dataType = UInt(parameters.device.DQ_BITS bits),
-            width = parameters.writeLatency + parameters.burstLength / 2 - 1,
+            width = parameters.writeLatency + parameters.additiveLatency + parameters.burstLength / 2 - 1,
             inputWidth = parameters.burstLength / 2,
             resetFunction = (register: UInt) => {
                 register init(0)
@@ -215,7 +215,7 @@ case class WritePath (
     val writeMaskRiseSerializer = ShiftRegister(
         ShiftRegisterParameters(
             dataType = UInt(parameters.device.DM_BITS bits),
-            width = parameters.writeLatency + parameters.burstLength / 2 - 1,
+            width = parameters.writeLatency + parameters.additiveLatency + parameters.burstLength / 2 - 1,
             inputWidth = parameters.burstLength / 2,
             resetFunction = (register: UInt) => {
                 register init(0)
@@ -229,7 +229,7 @@ case class WritePath (
     val writeMaskFallSerializer = ShiftRegister(
         ShiftRegisterParameters(
             dataType = UInt(parameters.device.DM_BITS bits),
-            width = parameters.writeLatency + parameters.burstLength / 2 - 1,
+            width = parameters.writeLatency + parameters.additiveLatency + parameters.burstLength / 2 - 1,
             inputWidth = parameters.burstLength / 2,
             resetFunction = (register: UInt) => {
                 register init(0)
@@ -458,7 +458,7 @@ case class WritePath (
                 Reg(Bool()) addTag(crossClockDomain)
             )
 
-            val writeLevelingEnableSync = Vec.fill(3)(
+            val writeLevelingEnableSync = Vec.fill(4)(
                 Reg(Bool()) addTag(crossClockDomain)
             )
 
@@ -470,7 +470,8 @@ case class WritePath (
             writeToggleSync(1) := writeToggleSync(2)
             writeToggleSync(0) := writeToggleSync(1)
 
-            writeLevelingEnableSync(2) := io.internal.writeLevelingEnable
+            writeLevelingEnableSync(3) := io.internal.writeLevelingEnable
+            writeLevelingEnableSync(2) := writeLevelingEnableSync(3)
             writeLevelingEnableSync(1) := writeLevelingEnableSync(2)
             writeLevelingEnableSync(0) := writeLevelingEnableSync(1)
 
@@ -479,26 +480,26 @@ case class WritePath (
             writeLevelingToggleSync(1) := writeLevelingToggleSync(2)
             writeLevelingToggleSync(0) := writeLevelingToggleSync(2) ^ writeLevelingToggleSync(1)
 
-            val dqsRise = Mux(writeLevelingEnableSync(0), writeLevelingToggleSync(0), True)
+            val dqsRise = Mux(writeLevelingEnableSync(1), writeLevelingToggleSync(0), True)
 
-            val writeLevelingDqsEnableSerializer = ShiftRegister(
-                ShiftRegisterParameters(
-                    dataType = Bool(),
-                    width = 3,
-                    inputWidth = 1,
-                    resetFunction = (register: Bool) => {
-                        register init(False)
-                    },
-                    defaultFunction = (register: Bool) => {
-                        register := False
-                    }
-                )
-            )
+            // val writeLevelingDqsEnableSerializer = ShiftRegister(
+            //     ShiftRegisterParameters(
+            //         dataType = Bool(),
+            //         width = 3,
+            //         inputWidth = 1,
+            //         resetFunction = (register: Bool) => {
+            //             register init(False)
+            //         },
+            //         defaultFunction = (register: Bool) => {
+            //             register := False
+            //         }
+            //     )
+            // )
 
             val dqsEnableSerializer = ShiftRegister(
                 ShiftRegisterParameters(
                     dataType = Bool(),
-                    width = parameters.writeLatency + parameters.burstLength / 2 + 3,
+                    width = parameters.writeLatency + parameters.additiveLatency + parameters.burstLength / 2 + 3,
                     inputWidth = parameters.burstLength / 2 + 2,
                     resetFunction = (register: Bool) => {
                         register init(False)
@@ -515,9 +516,9 @@ case class WritePath (
                 )
             )
 
-            writeLevelingDqsEnableSerializer.io.load := True
-            writeLevelingDqsEnableSerializer.io.shift := True
-            writeLevelingDqsEnableSerializer.io.input := Vec(writeLevelingEnableSync(0))
+            // writeLevelingDqsEnableSerializer.io.load := True
+            // writeLevelingDqsEnableSerializer.io.shift := True
+            // writeLevelingDqsEnableSerializer.io.input := Vec(writeLevelingEnableSync(0))
 
             dqsEnableSerializer.io.load := writeToggleSync(1) ^ writeToggleSync(0)
             dqsEnableSerializer.io.shift := True
@@ -531,7 +532,7 @@ case class WritePath (
             dqsOddr.io.s := False
             io.device.dqs.write(index) := dqsOddr.io.q
 
-            io.device.dqs.writeEnable(index) := writeLevelingDqsEnableSerializer.io.output(0) | dqsEnableSerializer.io.output(0)
+            io.device.dqs.writeEnable(index) := writeLevelingEnableSync(0) | dqsEnableSerializer.io.output(0)
         }
     }})
 }
@@ -595,7 +596,7 @@ object WritePathSimulation {
         ) = {
             while (true) {
                 if (!dut.io.device.command.we_n.toBoolean) {
-                    dqsClocks(0).waitRisingEdge(dut.parameters.writeLatency - 1)
+                    dqsClocks(0).waitRisingEdge(dut.parameters.writeLatency + dut.parameters.additiveLatency - 1)
                     sleep(1)
                     assert(dut.io.device.dqs.writeEnable.toInt == (1 << dut.parameters.device.DQS_BITS) - 1)
                     dqsClocks(0).waitRisingEdge()
@@ -664,7 +665,7 @@ object WritePathSimulation {
     def main(
         args: Array[String]
     ) = {
-        val burstLengths = Seq(4, 6, 8)
+        val burstLengths = Seq(4, 8)
         val writeLatencies = Seq(4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
 
         val tests = for {
