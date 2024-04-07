@@ -24,10 +24,10 @@ case class DDR3Parameters (
         rank
     )
 
-    val additiveLatency = if (device.TRCD.tCKCycles(tCKPeriod) == 1) 0
+    val additiveLatency = if (device.TRCD.tCKCycles(tCKPeriod) == 0) 0
                           else if (device.TRCD.tCKCycles(tCKPeriod) < readLatency - 1) readLatency - 2
                           else if (device.TRCD.tCKCycles(tCKPeriod) > readLatency) readLatency - 1
-                          else device.TRCD.tCKCycles(tCKPeriod) - 1
+                          else device.TRCD.tCKCycles(tCKPeriod)
 
     assert(additiveLatency == 0 || additiveLatency == readLatency - 1 || additiveLatency == readLatency - 2)
 

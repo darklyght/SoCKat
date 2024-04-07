@@ -42,10 +42,10 @@ case class WritePathInterface (
 }
 
 case class WritePath (
-    parameters: DDR3Parameters
+    parameters: DDR3Parameters,
+    dqsClockDomains: Seq[ClockDomain]
 ) extends Component {
     val io = new Bundle {
-        val dqsClock = in(Vec.fill(parameters.device.DQS_BITS)(Bool()))
         val device = master(DeviceInternal(parameters))
         val internal = slave(WritePathInterface(parameters))
     }
@@ -59,51 +59,51 @@ case class WritePath (
     val odth = if (parameters.burstLength == 4) parameters.device.ODTH4 else parameters.device.ODTH8
 
     val ckeSync = Vec.fill(3)(
-        Reg(Bool()) addTag(crossClockDomain)
+        Reg(Bool()) init(False) addTag(crossClockDomain)
     )
 
     val cs_nSync = Vec.fill(3)(
-        Reg(Bool()) addTag(crossClockDomain)
+        Reg(Bool()) init(True) addTag(crossClockDomain)
     )
 
     val odtSync = Vec.fill(3)(
-        Reg(Bool()) addTag(crossClockDomain)
+        Reg(Bool()) init(False) addTag(crossClockDomain)
     )
 
     val commandToggleSync = Vec.fill(4)(
-        Reg(Bool()) addTag(crossClockDomain)
+        Reg(Bool()) init(False) addTag(crossClockDomain)
     )
 
     val ras_nSync = Vec.fill(3)(
-        Reg(Bool()) addTag(crossClockDomain)
+        Reg(Bool()) init(True) addTag(crossClockDomain)
     )
 
     val cas_nSync = Vec.fill(3)(
-        Reg(Bool()) addTag(crossClockDomain)
+        Reg(Bool()) init(True) addTag(crossClockDomain)
     )
 
     val we_nSync = Vec.fill(3)(
-        Reg(Bool()) addTag(crossClockDomain)
+        Reg(Bool()) init(True) addTag(crossClockDomain)
     )
 
     val baSync = Vec.fill(3)(
-        Reg(UInt(parameters.device.BA_BITS bits)) addTag(crossClockDomain)
+        Reg(UInt(parameters.device.BA_BITS bits)) init(0) addTag(crossClockDomain)
     )
 
     val addrSync = Vec.fill(3)(
-        Reg(UInt(parameters.device.ADDR_BITS bits)) addTag(crossClockDomain)
+        Reg(UInt(parameters.device.ADDR_BITS bits)) init(0) addTag(crossClockDomain)
     )
 
     val writeToggleSync = Vec.fill(4)(
-        Reg(Bool()) addTag(crossClockDomain)
+        Reg(Bool()) init(False) addTag(crossClockDomain)
     )
 
     val writeDataSync = Vec.fill(3)(
-        Reg(UInt(parameters.burstLength * parameters.device.DQ_BITS bits)) addTag(crossClockDomain)
+        Reg(UInt(parameters.burstLength * parameters.device.DQ_BITS bits)) init(0) addTag(crossClockDomain)
     )
 
     val writeMaskSync = Vec.fill(3)(
-        Reg(UInt(parameters.burstLength * parameters.device.DM_BITS bits)) addTag(crossClockDomain)
+        Reg(UInt(parameters.burstLength * parameters.device.DM_BITS bits)) init(0) addTag(crossClockDomain)
     )
 
     ckeSync(2) := io.internal.cke
@@ -441,29 +441,18 @@ case class WritePath (
         io.device.dm.writeEnable(index) := dqEnableSerializer.io.output(0)
     }})
 
-    io.dqsClock.zipWithIndex.foreach({case (clock, index) => {
-        val dqsClockDomain = ClockDomain(
-            clock = clock,
-            reset = ClockDomain.current.readResetWire,
-            config = ClockDomainConfig(
-                clockEdge = RISING,
-                resetKind = ASYNC,
-                resetActiveLevel = HIGH,
-                clockEnableActiveLevel = HIGH
-            )
-        )
-
-        val dqsClockArea = new ClockingArea(dqsClockDomain) {
+    val dqsClockArea = dqsClockDomains.zipWithIndex.foreach({case (domain, index) => {
+        new ClockingArea(domain) {
             val writeToggleSync = Vec.fill(3)(
-                Reg(Bool()) addTag(crossClockDomain)
+                Reg(Bool()) init(False) addTag(crossClockDomain)
             )
 
             val writeLevelingEnableSync = Vec.fill(4)(
-                Reg(Bool()) addTag(crossClockDomain)
+                Reg(Bool()) init(False) addTag(crossClockDomain)
             )
 
             val writeLevelingToggleSync = Vec.fill(4)(
-                Reg(Bool()) addTag(crossClockDomain)
+                Reg(Bool()) init(False) addTag(crossClockDomain)
             )
 
             writeToggleSync(2) := io.internal.writeToggle
@@ -481,20 +470,6 @@ case class WritePath (
             writeLevelingToggleSync(0) := writeLevelingToggleSync(2) ^ writeLevelingToggleSync(1)
 
             val dqsRise = Mux(writeLevelingEnableSync(1), writeLevelingToggleSync(0), True)
-
-            // val writeLevelingDqsEnableSerializer = ShiftRegister(
-            //     ShiftRegisterParameters(
-            //         dataType = Bool(),
-            //         width = 3,
-            //         inputWidth = 1,
-            //         resetFunction = (register: Bool) => {
-            //             register init(False)
-            //         },
-            //         defaultFunction = (register: Bool) => {
-            //             register := False
-            //         }
-            //     )
-            // )
 
             val dqsEnableSerializer = ShiftRegister(
                 ShiftRegisterParameters(
@@ -515,10 +490,6 @@ case class WritePath (
                     ddrClkEdge = "SAME_EDGE"
                 )
             )
-
-            // writeLevelingDqsEnableSerializer.io.load := True
-            // writeLevelingDqsEnableSerializer.io.shift := True
-            // writeLevelingDqsEnableSerializer.io.input := Vec(writeLevelingEnableSync(0))
 
             dqsEnableSerializer.io.load := writeToggleSync(1) ^ writeToggleSync(0)
             dqsEnableSerializer.io.shift := True
@@ -541,6 +512,8 @@ object WritePathVerilog {
     def main(
         args: Array[String]
     ) = {
+        val parameters = DDR3Parameters()
+
         val compiled = SpinalConfig(
             mode = Verilog,
             targetDirectory = "../src/hdl/ddr3/",
@@ -549,7 +522,20 @@ object WritePathVerilog {
                 vcdPath = "wave.fst"
             )
         ).generate(
-            WritePath(DDR3Parameters())
+            WritePath(
+                parameters = parameters,
+                dqsClockDomains = (0 until parameters.device.DQS_BITS).map(i => {
+                    ClockDomain.external(
+                        name = "dqsClock" + i,
+                        config = ClockDomainConfig(
+                            clockEdge = RISING,
+                            resetKind = ASYNC,
+                            resetActiveLevel = HIGH,
+                            clockEnableActiveLevel = HIGH
+                        )
+                    )
+                })
+            )
         )
     }
 }
@@ -636,11 +622,8 @@ object WritePathSimulation {
 
         dut.clockDomain.forkStimulus(frequency = HertzNumber(400000000))
         dut.clockDomain.waitRisingEdge()
-        val dqsClocks = dut.io.dqsClock.map(clock => {
-            ClockDomain(clock)
-        })
         sleep(625)
-        dqsClocks.foreach(clock => {
+        dut.dqsClockDomains.foreach(clock => {
             clock.forkStimulus(frequency = HertzNumber(400000000))
         })
         
@@ -657,7 +640,7 @@ object WritePathSimulation {
         dut.clockDomain.waitSampling(200)
 
         val driverThread = fork(driver(dut, queue))
-        val monitorThread = fork(monitor(dut, dqsClocks, queue))
+        val monitorThread = fork(monitor(dut, dut.dqsClockDomains, queue))
 
         dut.clockDomain.waitSampling(10000)
     }
@@ -676,6 +659,8 @@ object WritePathSimulation {
         tests.foreach({case (burstLength, writeLatency) => {
             println(burstLength, writeLatency)
 
+            val parameters = DDR3Parameters(burstLength = burstLength, writeLatency = writeLatency)
+
             val compiled = SimConfig.withIVerilog
                                     .withFstWave
                                     .addSimulatorFlag("-D den4096Mb")
@@ -685,7 +670,20 @@ object WritePathSimulation {
                                     .addSimulatorFlag("-s glbl")
                                     .addIncludeDir("../sim/lib/DDR3_SDRAM_Verilog_Model")
                                     .compile(
-                                        WritePath(DDR3Parameters(burstLength = burstLength, writeLatency = writeLatency))
+                                        WritePath(
+                                            parameters = parameters,
+                                            dqsClockDomains = (0 until parameters.device.DQS_BITS).map(i => {
+                                                ClockDomain.external(
+                                                    name = "dqsClock" + i,
+                                                    config = ClockDomainConfig(
+                                                        clockEdge = RISING,
+                                                        resetKind = ASYNC,
+                                                        resetActiveLevel = HIGH,
+                                                        clockEnableActiveLevel = HIGH
+                                                    )
+                                                )
+                                            })
+                                        )
                                     )
             
             compiled.doSim(dut => test(dut))

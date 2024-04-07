@@ -26,10 +26,10 @@ case class ReadPathInterface (
 }
 
 case class ReadPath (
-    parameters: DDR3Parameters
+    parameters: DDR3Parameters,
+    controllerClockDomain: ClockDomain
 ) extends Component {
     val io = new Bundle {
-        val controllerClock = in Bool()
         val device = master(DeviceInternal(parameters))
         val internal = slave(ReadPathInterface(parameters))
     }
@@ -52,11 +52,11 @@ case class ReadPath (
     io.device.dqs.writeEnable := 0
 
     val dqIddrOut = Vec.fill(parameters.burstLength)(
-        Reg(UInt(parameters.device.DQ_BITS bits))
+        Reg(UInt(parameters.device.DQ_BITS bits)) init(0)
     )
     
     val readToggleSync = Vec.fill(4)(
-        Reg(Bool()) addTag(crossClockDomain)
+        Reg(Bool()) init(False) addTag(crossClockDomain)
     )
 
     val readValid = Reg(Bool()) init(False)
@@ -186,24 +186,13 @@ case class ReadPath (
         )
     }
 
-    val controllerClockDomain = ClockDomain(
-        clock = io.controllerClock,
-        reset = ClockDomain.current.readResetWire,
-        config = ClockDomainConfig(
-            clockEdge = RISING,
-            resetKind = ASYNC,
-            resetActiveLevel = HIGH,
-            clockEnableActiveLevel = HIGH
-        )
-    )
-
     val controllerClockArea = new ClockingArea(controllerClockDomain) {
         val readValidToggle = Vec.fill(4)(
-            Reg(Bool()) addTag(crossClockDomain)
+            Reg(Bool()) init(False) addTag(crossClockDomain)
         )
 
         val readData = Vec.fill(3)(
-            Reg(UInt(parameters.burstLength * parameters.device.DQ_BITS bits)) addTag(crossClockDomain)
+            Reg(UInt(parameters.burstLength * parameters.device.DQ_BITS bits)) init(0) addTag(crossClockDomain)
         )
 
         readValidToggle(3) := readValid
@@ -234,7 +223,18 @@ object ReadPathVerilog {
                 vcdPath = "wave.fst"
             )
         ).generate(
-            ReadPath(DDR3Parameters())
+            ReadPath(
+                parameters = DDR3Parameters(),
+                controllerClockDomain = ClockDomain.external(
+                    name = "controllerClock",
+                    config = ClockDomainConfig(
+                        clockEdge = RISING,
+                        resetKind = ASYNC,
+                        resetActiveLevel = HIGH,
+                        clockEnableActiveLevel = HIGH
+                    )
+                )
+            )
         )
     }
 }
@@ -310,8 +310,7 @@ object ReadPathSimulation {
         dut.clockDomain.forkStimulus(frequency = HertzNumber(400000000))
         dut.clockDomain.waitRisingEdge()
         sleep(1875)
-        val controllerClock = ClockDomain(dut.io.controllerClock)
-        controllerClock.forkStimulus(frequency = HertzNumber(200000000))
+        dut.controllerClockDomain.forkStimulus(frequency = HertzNumber(200000000))
 
         dut.io.device.dq.read #= 0
         dut.io.internal.readToggle #= false
@@ -319,8 +318,8 @@ object ReadPathSimulation {
         dut.clockDomain.waitSampling(200)
 
         val driverThread = fork(driver(dut, driveQueue, verifyQueue))
-        val monitorThread = fork(monitor(dut, controllerClock, verifyQueue))
-        val readToggleThread = fork(readToggle(dut, controllerClock, driveQueue))
+        val monitorThread = fork(monitor(dut, dut.controllerClockDomain, verifyQueue))
+        val readToggleThread = fork(readToggle(dut, dut.controllerClockDomain, driveQueue))
 
         dut.clockDomain.waitSampling(10000)
     }
@@ -348,7 +347,18 @@ object ReadPathSimulation {
                                     .addSimulatorFlag("-s glbl")
                                     .addIncludeDir("../sim/lib/DDR3_SDRAM_Verilog_Model")
                                     .compile(
-                                        ReadPath(DDR3Parameters(burstLength = burstLength, readLatency = readLatency))
+                                        ReadPath(
+                                            parameters = DDR3Parameters(burstLength = burstLength, readLatency = readLatency),
+                                            controllerClockDomain = ClockDomain.external(
+                                                name = "controllerClock",
+                                                config = ClockDomainConfig(
+                                                    clockEdge = RISING,
+                                                    resetKind = ASYNC,
+                                                    resetActiveLevel = HIGH,
+                                                    clockEnableActiveLevel = HIGH
+                                                )
+                                            )
+                                        )
                                     )
             
             compiled.doSim(dut => test(dut))

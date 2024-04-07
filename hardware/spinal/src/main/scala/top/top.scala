@@ -35,6 +35,7 @@ case class Top (
     val uartClockDomain = ClockDomain(
         clock = uartClock.io.clkOut0,
         reset = reset,
+        clockEnable = True,
         frequency = FixedFrequency(HertzNumber(uartClock.getFrequencyMultiplier(0) * parameters.clockFrequency)),
         config = ClockDomainConfig(
             clockEdge = RISING,

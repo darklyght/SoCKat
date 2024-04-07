@@ -55,9 +55,28 @@ case class PHY (
         )
     ))
 
+    val readResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    readResetSynchronizer.io.clock := clockGenerator.io.clkOut1
+    readResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
+
+    val writeResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    writeResetSynchronizer.io.clock := clockGenerator.io.clkOut2
+    writeResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
+
+    val dqsResetSynchronizer = (0 until parameters.device.DQS_BITS).map(i => {
+        ResetSynchronizer(ResetSynchronizerParameters())
+    })
+    dqsResetSynchronizer.zipWithIndex.foreach({case (synchronizer, index) => {
+        synchronizer.io.clock := dqsClockGenerator.io.clocks(index).p
+        synchronizer.io.async := ClockDomain.current.readResetWire || ~dqsClockGenerator.io.phaseUpdate.ready
+    }})
+
+    val controllerClockDomain = ClockDomain.current
+
     val readClockDomain = ClockDomain(
         clock = clockGenerator.io.clkOut1,
-        reset = ClockDomain.current.readResetWire,
+        reset = readResetSynchronizer.io.sync,
+        clockEnable = True,
         config = ClockDomainConfig(
             clockEdge = RISING,
             resetKind = ASYNC,
@@ -68,7 +87,8 @@ case class PHY (
 
     val writeClockDomain = ClockDomain(
         clock = clockGenerator.io.clkOut2,
-        reset = ClockDomain.current.readResetWire,
+        reset = writeResetSynchronizer.io.sync,
+        clockEnable = True,
         config = ClockDomainConfig(
             clockEdge = RISING,
             resetKind = ASYNC,
@@ -78,11 +98,29 @@ case class PHY (
     )
 
     val readClockArea = new ClockingArea(readClockDomain) {
-        val readPath = ReadPath(parameters)
+        val readPath = ReadPath(
+            parameters = parameters,
+            controllerClockDomain = controllerClockDomain
+        )
     }
 
     val writeClockArea = new ClockingArea(writeClockDomain) {
-        val writePath = WritePath(parameters)
+        val writePath = WritePath(
+            parameters = parameters, 
+            (0 until parameters.device.DQS_BITS).map(i => {
+                ClockDomain(
+                    clock = dqsClockGenerator.io.clocks(i).p,
+                    reset = dqsResetSynchronizer(i).io.sync,
+                    clockEnable = True,
+                    config = ClockDomainConfig(
+                        clockEdge = RISING,
+                        resetKind = ASYNC,
+                        resetActiveLevel = HIGH,
+                        clockEnableActiveLevel = HIGH
+                    )
+                )
+            })
+        )
     }
 
     val ioCells = IOCells(parameters)
@@ -99,15 +137,11 @@ case class PHY (
 
     dqsClockGenerator.io.phaseUpdate <> io.internal.dqsPhaseUpdate
 
-    readClockArea.readPath.io.controllerClock := ClockDomain.current.readClockWire
     readClockArea.readPath.io.device.dq.read := ioCells.io.internal.dq.read
     readClockArea.readPath.io.device.dm.read := ioCells.io.internal.dm.read
     readClockArea.readPath.io.device.dqs.read := ioCells.io.internal.dqs.read
     readClockArea.readPath.io.internal <> io.internal.read
 
-    writeClockArea.writePath.io.dqsClock := Vec((0 until parameters.device.DQS_BITS).map((index) => {
-        dqsClockGenerator.io.clocks(index).p
-    }))
     ioCells.io.internal.cke := writeClockArea.writePath.io.device.cke
     ioCells.io.internal.cs_n := writeClockArea.writePath.io.device.cs_n
     ioCells.io.internal.command := writeClockArea.writePath.io.device.command
@@ -128,7 +162,7 @@ case class PHY (
     io.internal.ready := clockGenerator.io.locked
 }
 
-object PHYInterfaceVerilog {
+object PHYVerilog {
     def main(
         args: Array[String]
     ) = {

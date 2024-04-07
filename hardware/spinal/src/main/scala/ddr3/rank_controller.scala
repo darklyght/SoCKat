@@ -34,7 +34,7 @@ case class RankController (
     val writeToggle = Reg(Bool()) init(False)
     val writeLevelingToggle = Reg(Bool()) init(False)
 
-    val readValidToggle = Reg(Bool())
+    val readValidToggle = Reg(Bool()) init(False)
 
     val counter = Reg(UInt(17 bits)) init(0)
 

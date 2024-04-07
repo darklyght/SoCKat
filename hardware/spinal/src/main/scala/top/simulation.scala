@@ -32,6 +32,7 @@ case class Simulation (
     val topClockDomain = ClockDomain(
         clock = topClock.io.clk,
         reset = reset.io.reset,
+        clockEnable = True,
         config = ClockDomainConfig(
             clockEdge = RISING,
             resetKind = ASYNC,
@@ -43,6 +44,7 @@ case class Simulation (
     val uartClockDomain = ClockDomain(
         clock = uartClock.io.clk,
         reset = reset.io.reset,
+        clockEnable = True,
         config = ClockDomainConfig(
             clockEdge = RISING,
             resetKind = ASYNC,
