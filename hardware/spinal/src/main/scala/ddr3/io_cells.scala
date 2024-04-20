@@ -12,6 +12,7 @@ import sockat.utilities._
 case class DeviceCommand (
     parameters: DDR3Parameters
 ) extends Bundle with IMasterSlave {
+    val cs_n = Vec.fill(parameters.device.RANKS)(Bool())
     val ras_n = Bool()
     val cas_n = Bool()
     val we_n = Bool()
@@ -19,6 +20,7 @@ case class DeviceCommand (
     val addr = UInt(parameters.device.ADDR_BITS bits)
 
     override def asMaster() = {
+        out(cs_n)
         out(ras_n)
         out(cas_n)
         out(we_n)
@@ -33,11 +35,10 @@ case class Device (
     val rst_n = out Bool()
     val ck = out(differential(Bool()))
     val cke = out Bool()
-    val cs_n = out Bool()
     val command = master(DeviceCommand(parameters))
     val odt = out Bool()
-    val dq = inout(Analog(UInt(parameters.device.DQ_BITS bits)))
-    val dm = inout(Analog(UInt(parameters.device.DM_BITS bits)))
+    val dq = inout(Vec.fill(parameters.dqParallel)(Analog(UInt(parameters.device.DQ_BITS bits))))
+    val dm = inout(Vec.fill(parameters.dqParallel)(Analog(UInt(parameters.device.DM_BITS bits))))
     val dqs = inout(Analog(differential(UInt(parameters.device.DQS_BITS bits))))
 }
 
@@ -47,22 +48,20 @@ case class DeviceInternal (
     val rst_n = Bool()
     val ck = Bool()
     val cke = Bool()
-    val cs_n = Bool()
     val command = DeviceCommand(parameters)
     val odt = Bool()
-    val dq = TriStateArray(parameters.device.DQ_BITS bits)
-    val dm = TriStateArray(parameters.device.DM_BITS bits)
+    val dq = Vec.fill(parameters.dqParallel)(TriStateArray(parameters.device.DQ_BITS bits))
+    val dm = Vec.fill(parameters.dqParallel)(TriStateArray(parameters.device.DM_BITS bits))
     val dqs = TriStateArray(parameters.device.DQS_BITS bits)
 
     override def asMaster() = {
         out(rst_n)
         out(ck)
         out(cke)
-        out(cs_n)
         master(command)
         out(odt)
-        master(dq)
-        master(dm)
+        dq.foreach(master(_))
+        dm.foreach(master(_))
         master(dqs)
     }
 }
@@ -78,7 +77,9 @@ case class IOCells (
     val rst_n = OBUF(OBUFParameters())
     val ck = OBUFDS(OBUFDSParameters())
     val cke = OBUF(OBUFParameters())
-    val cs_n = OBUF(OBUFParameters())
+    val cs_n = Seq.fill(parameters.device.RANKS) {
+        OBUF(OBUFParameters())
+    }
     val ras_n = OBUF(OBUFParameters())
     val cas_n = OBUF(OBUFParameters())
     val we_n = OBUF(OBUFParameters())
@@ -89,11 +90,15 @@ case class IOCells (
     val addr = Seq.fill(parameters.device.ADDR_BITS) {
         OBUF(OBUFParameters())
     }
-    val dq = Seq.fill(parameters.device.DQ_BITS) {
-        IOBUF(IOBUFParameters())
+    val dq = Seq.fill(parameters.dqParallel) {
+        Seq.fill(parameters.device.DQ_BITS) {
+            IOBUF(IOBUFParameters())
+        }
     }
-    val dm = Seq.fill(parameters.device.DM_BITS) {
-        IOBUF(IOBUFParameters())
+    val dm = Seq.fill(parameters.dqParallel) {
+        Seq.fill(parameters.device.DM_BITS) {
+            IOBUF(IOBUFParameters())
+        }
     }
     val dqs = Seq.fill(parameters.device.DQS_BITS) {
         IOBUFDS(IOBUFDSParameters())
@@ -109,8 +114,10 @@ case class IOCells (
     cke.io.i := io.internal.cke
     io.device.cke := cke.io.o
 
-    cs_n.io.i := io.internal.cs_n
-    io.device.cs_n := cs_n.io.o
+    cs_n.zipWithIndex.foreach({case (obuf, i) => {
+        obuf.io.i := io.internal.command.cs_n(i)
+        io.device.command.cs_n(i) := obuf.io.o
+    }})
 
     ras_n.io.i := io.internal.command.ras_n
     io.device.command.ras_n := ras_n.io.o
@@ -124,30 +131,34 @@ case class IOCells (
     odt.io.i := io.internal.odt
     io.device.odt := odt.io.o
 
-    ba.zipWithIndex.foreach({case (obuf, index) => {
-        obuf.io.i := io.internal.command.ba(index)
-        io.device.command.ba(index) := obuf.io.o
+    ba.zipWithIndex.foreach({case (obuf, i) => {
+        obuf.io.i := io.internal.command.ba(i)
+        io.device.command.ba(i) := obuf.io.o
     }})
 
-    addr.zipWithIndex.foreach({case (obuf, index) => {
-        obuf.io.i := io.internal.command.addr(index)
-        io.device.command.addr(index) := obuf.io.o
+    addr.zipWithIndex.foreach({case (obuf, i) => {
+        obuf.io.i := io.internal.command.addr(i)
+        io.device.command.addr(i) := obuf.io.o
     }})
 
-    dq.zipWithIndex.foreach({case (iobuf, index) => {
-        iobuf.io.i := io.internal.dq(index).write
-        iobuf.io.t := ~io.internal.dq(index).writeEnable
-        io.internal.dq(index).read := iobuf.io.o
-        io.device.dq(index) := iobuf.io.io
+    dq.zipWithIndex.foreach({case (chip, i) => {
+        chip.zipWithIndex.foreach({case (iobuf, j) => {
+            iobuf.io.i := io.internal.dq(i)(j).write
+            iobuf.io.t := ~io.internal.dq(i)(j).writeEnable
+            io.internal.dq(i)(j).read := iobuf.io.o
+            io.device.dq(i)(j) := iobuf.io.io
+        }})
     }})
 
-    dm.zipWithIndex.foreach({case (iobuf, index) => {
-        iobuf.io.i := io.internal.dm(index).write
-        iobuf.io.t := ~io.internal.dm(index).writeEnable
-        io.internal.dm(index).read := iobuf.io.o
-        io.device.dm(index) := iobuf.io.io
+    dm.zipWithIndex.foreach({case (chip, i) => {
+        chip.zipWithIndex.foreach({case (iobuf, j) => {
+            iobuf.io.i := io.internal.dm(i)(j).write
+            iobuf.io.t := ~io.internal.dm(i)(j).writeEnable
+            io.internal.dm(i)(j).read := iobuf.io.o
+            io.device.dm(i)(j) := iobuf.io.io
+        }})
     }})
-
+    
     dqs.zipWithIndex.foreach({case (iobufds, index) => {
         iobufds.io.i := io.internal.dqs(index).write
         iobufds.io.t := ~io.internal.dqs(index).writeEnable
@@ -164,26 +175,34 @@ case class IOCellsDDR3 (
         val internal = slave(DeviceInternal(parameters))
     }
 
-    val model = ddr3(parameters)
+    val model = Seq.fill(parameters.device.RANKS) {
+        Seq.fill(parameters.dqParallel) {
+            ddr3(parameters)
+        }
+    }
     val ioCells = IOCells(parameters)
 
     ioCells.io.internal <> io.internal
 
-    model.io.rst_n := ioCells.io.device.rst_n
-    model.io.ck := ioCells.io.device.ck.p
-    model.io.ck_n := ioCells.io.device.ck.n
-    model.io.cke := ioCells.io.device.cke
-    model.io.cs_n := ioCells.io.device.cs_n
-    model.io.ras_n := ioCells.io.device.command.ras_n
-    model.io.cas_n := ioCells.io.device.command.cas_n
-    model.io.we_n := ioCells.io.device.command.we_n
-    model.io.dm_tdqs := ioCells.io.device.dm
-    model.io.ba := ioCells.io.device.command.ba
-    model.io.addr := ioCells.io.device.command.addr
-    model.io.dq := ioCells.io.device.dq
-    model.io.dqs := ioCells.io.device.dqs.p
-    model.io.dqs_n := ioCells.io.device.dqs.n
-    model.io.odt := ioCells.io.device.odt
+    (0 until parameters.device.RANKS).foreach(i => {
+        (0 until parameters.dqParallel).foreach(j => {
+            model(i)(j).io.rst_n := ioCells.io.device.rst_n
+            model(i)(j).io.ck := ioCells.io.device.ck.p
+            model(i)(j).io.ck_n := ioCells.io.device.ck.n
+            model(i)(j).io.cke := ioCells.io.device.cke
+            model(i)(j).io.cs_n := ioCells.io.device.command.cs_n(i)
+            model(i)(j).io.ras_n := ioCells.io.device.command.ras_n
+            model(i)(j).io.cas_n := ioCells.io.device.command.cas_n
+            model(i)(j).io.we_n := ioCells.io.device.command.we_n
+            model(i)(j).io.dm_tdqs := ioCells.io.device.dm(j)
+            model(i)(j).io.ba := ioCells.io.device.command.ba
+            model(i)(j).io.addr := ioCells.io.device.command.addr
+            model(i)(j).io.dq := ioCells.io.device.dq(j)
+            model(i)(j).io.dqs := ioCells.io.device.dqs.p
+            model(i)(j).io.dqs_n := ioCells.io.device.dqs.n
+            model(i)(j).io.odt := ioCells.io.device.odt
+        })
+    })
 }
 
 object IOCellsVerilog {

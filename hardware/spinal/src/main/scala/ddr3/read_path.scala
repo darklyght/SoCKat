@@ -15,7 +15,7 @@ case class ReadPathInterface (
     parameters: DDR3Parameters
 ) extends Bundle with IMasterSlave {
     val readToggle = Bool()
-    val readData = UInt(parameters.burstLength * parameters.device.DQ_BITS bits)
+    val readData = Vec.fill(parameters.dqParallel)(UInt(parameters.burstLength * parameters.device.DQ_BITS bits))
     val readValidToggle = Bool()
 
     override def asMaster() = {
@@ -37,22 +37,30 @@ case class ReadPath (
     io.device.rst_n := False
     io.device.ck := False
     io.device.cke := False
-    io.device.cs_n := True
+    io.device.command.cs_n.foreach(cs_n => {
+        cs_n := True
+    })
     io.device.command.ras_n := True
     io.device.command.cas_n := True
     io.device.command.we_n := True
     io.device.command.ba := 0
     io.device.command.addr := 0
     io.device.odt := False
-    io.device.dq.write := 0
-    io.device.dq.writeEnable := 0
-    io.device.dm.write := 0
-    io.device.dm.writeEnable := 0
+    io.device.dq.foreach(dq => {
+        dq.write := 0
+        dq.writeEnable := 0
+    })
+    io.device.dm.foreach(dm => {
+        dm.write := 0
+        dm.writeEnable := 0
+    })
     io.device.dqs.write := 0
     io.device.dqs.writeEnable := 0
 
-    val dqIddrOut = Vec.fill(parameters.burstLength)(
-        Reg(UInt(parameters.device.DQ_BITS bits)) init(0)
+    val dqIddrOut = Vec.fill(parameters.dqParallel)(
+        Vec.fill(parameters.burstLength)(
+            Reg(UInt(parameters.device.DQ_BITS bits)) init(0)
+        )
     )
     
     val readToggleSync = Vec.fill(4)(
@@ -108,40 +116,46 @@ case class ReadPath (
         )
     )
 
-    val readDataRiseDeserializer = ShiftRegister(
-        ShiftRegisterParameters(
-            dataType = UInt(parameters.device.DQ_BITS bits),
-            width = parameters.burstLength / 2,
-            outputWidth = parameters.burstLength / 2,
-            resetFunction = (register: UInt) => {
-                register init(0)
-            },
-            defaultFunction = (register: UInt) => {
-                register := 0
-            }
-        )
-    )
-
-    val readDataFallDeserializer = ShiftRegister(
-        ShiftRegisterParameters(
-            dataType = UInt(parameters.device.DQ_BITS bits),
-            width = parameters.burstLength / 2,
-            outputWidth = parameters.burstLength / 2,
-            resetFunction = (register: UInt) => {
-                register init(0)
-            },
-            defaultFunction = (register: UInt) => {
-                register := 0
-            }
-        )
-    )
-
-    val dqIddr = Seq.fill(parameters.device.DQ_BITS) {
-        IDDR(
-            IDDRParameters(
-                ddrClkEdge = "SAME_EDGE_PIPELINED"
+    val readDataRiseDeserializer = Seq.fill(parameters.dqParallel) {
+        ShiftRegister(
+            ShiftRegisterParameters(
+                dataType = UInt(parameters.device.DQ_BITS bits),
+                width = parameters.burstLength / 2,
+                outputWidth = parameters.burstLength / 2,
+                resetFunction = (register: UInt) => {
+                    register init(0)
+                },
+                defaultFunction = (register: UInt) => {
+                    register := 0
+                }
             )
         )
+    }
+
+    val readDataFallDeserializer = Seq.fill(parameters.dqParallel) {
+        ShiftRegister(
+            ShiftRegisterParameters(
+                dataType = UInt(parameters.device.DQ_BITS bits),
+                width = parameters.burstLength / 2,
+                outputWidth = parameters.burstLength / 2,
+                resetFunction = (register: UInt) => {
+                    register init(0)
+                },
+                defaultFunction = (register: UInt) => {
+                    register := 0
+                }
+            )
+        )
+    }
+
+    val dqIddr = Seq.fill(parameters.dqParallel){
+        Seq.fill(parameters.device.DQ_BITS) {
+            IDDR(
+                IDDRParameters(
+                    ddrClkEdge = "SAME_EDGE_PIPELINED"
+                )
+            )
+        }
     }
 
     readValidSerializer.io.load := readToggleSync(0)
@@ -156,35 +170,42 @@ case class ReadPath (
     shiftSerializer.io.shift := True
     shiftSerializer.io.input := Vec(True, parameters.burstLength / 2 - 1)
 
-    readDataRiseDeserializer.io.load := loadSerializer.io.output(0)
-    readDataRiseDeserializer.io.shift := shiftSerializer.io.output(0)
-    readDataRiseDeserializer.io.input := Vec(
-        Cat(dqIddr.map((iddr) => {iddr.io.q1})
-    ).asUInt)
-
-    readDataFallDeserializer.io.load := loadSerializer.io.output(0)
-    readDataFallDeserializer.io.shift := shiftSerializer.io.output(0)
-    readDataFallDeserializer.io.input := Vec(
-        Cat(dqIddr.map((iddr) => {iddr.io.q2})
-    ).asUInt)
-
-    dqIddr.zipWithIndex.foreach({case (iddr, index) => {
-        iddr.io.c := ClockDomain.current.readClockWire
-        iddr.io.ce := True
-        iddr.io.d := io.device.dq(index).read
-        iddr.io.r := ClockDomain.current.readResetWire
-        iddr.io.s := False
+    readDataRiseDeserializer.zipWithIndex.foreach({case (serializer, index) => {
+        serializer.io.load := loadSerializer.io.output(0)
+        serializer.io.shift := shiftSerializer.io.output(0)
+        serializer.io.input := Vec(
+            Cat(dqIddr(index).map((iddr) => {iddr.io.q1})
+        ).asUInt)
     }})
+
+    readDataFallDeserializer.zipWithIndex.foreach({case (serializer, index) => {
+        serializer.io.load := loadSerializer.io.output(0)
+        serializer.io.shift := shiftSerializer.io.output(0)
+        serializer.io.input := Vec(
+            Cat(dqIddr(index).map((iddr) => {iddr.io.q2})
+        ).asUInt)
+    }})
+
+    dqIddr.zipWithIndex.foreach({case (chip, i) => {
+        chip.zipWithIndex.foreach({case (iddr, j) => {
+            iddr.io.c := ClockDomain.current.readClockWire
+            iddr.io.ce := True
+            iddr.io.d := io.device.dq(i)(j).read
+            iddr.io.r := ClockDomain.current.readResetWire
+            iddr.io.s := False
+        }})
+    }})
+    
 
     readValid := readValidSerializer.io.output(0) ^ readValid
 
-    when (readValid) {
-        dqIddrOut := Vec(
-            (readDataRiseDeserializer.io.output zip readDataFallDeserializer.io.output).flatMap({case (rise, fall) => {
+    dqIddrOut.zipWithIndex.foreach({case (output, index) => {
+        output := Vec(
+            (readDataRiseDeserializer(index).io.output zip readDataFallDeserializer(index).io.output).flatMap({case (rise, fall) => {
                 Seq(rise, fall)
             }})
         )
-    }
+    }})
 
     val controllerClockArea = new ClockingArea(controllerClockDomain) {
         val readValidToggle = Vec.fill(4)(
@@ -192,7 +213,9 @@ case class ReadPath (
         )
 
         val readData = Vec.fill(3)(
-            Reg(UInt(parameters.burstLength * parameters.device.DQ_BITS bits)) init(0) addTag(crossClockDomain)
+            Vec.fill(parameters.dqParallel)(
+                Reg(UInt(parameters.burstLength * parameters.device.DQ_BITS bits)) init(0) addTag(crossClockDomain)
+            )
         )
 
         readValidToggle(3) := readValid
@@ -200,7 +223,9 @@ case class ReadPath (
         readValidToggle(1) := readValidToggle(2)
         readValidToggle(0) := readValidToggle(1)
 
-        readData(2) := Cat(dqIddrOut.reverse).asUInt
+        readData(2).zip(dqIddrOut).foreach({case (data, output) => {
+            data := Cat(output.reverse).asUInt
+        }})
         readData(1) := readData(2)
         when (readValidToggle(2) ^ readValidToggle(1)) {
             readData(0) := readData(1)
@@ -245,8 +270,8 @@ object ReadPathSimulation {
     ) = {
         def driver(
             dut: ReadPath,
-            driveQueue: Queue[BigInt],
-            verifyQueue: Queue[BigInt]
+            driveQueue: Queue[Seq[BigInt]],
+            verifyQueue: Queue[Seq[BigInt]]
         ) = {
             while (true) {
                 val readToggle = dut.io.internal.readToggle.toBoolean
@@ -258,12 +283,14 @@ object ReadPathSimulation {
 
                 val buffer = driveQueue(0)
                 for (i <- dut.parameters.burstLength / 2 - 1 to 0 by -1) {
-                    dut.io.device.dq.read #= (buffer >> ((i * 2 + 1) * dut.parameters.device.DQ_BITS)) & ((1 << dut.parameters.device.DQ_BITS) - 1)
-                    dut.clockDomain.waitRisingEdge()
-                    sleep(625)
-                    dut.io.device.dq.read #= (buffer >> ((i * 2) * dut.parameters.device.DQ_BITS)) & ((1 << dut.parameters.device.DQ_BITS) - 1)
-                    dut.clockDomain.waitFallingEdge()
-                    sleep(625)
+                    dut.io.device.dq.zip(buffer).foreach({case (dq, data) => {
+                        dq.read #= (data >> ((i * 2 + 1) * dut.parameters.device.DQ_BITS)) & ((BigInt(1) << dut.parameters.device.DQ_BITS) - 1)
+                        dut.clockDomain.waitRisingEdge()
+                        sleep(625)
+                        dq.read #= (data >> ((i * 2) * dut.parameters.device.DQ_BITS)) & ((BigInt(1) << dut.parameters.device.DQ_BITS) - 1)
+                        dut.clockDomain.waitFallingEdge()
+                        sleep(625)
+                    }})
                 }
 
                 verifyQueue.enqueue(driveQueue.dequeue())
@@ -273,7 +300,7 @@ object ReadPathSimulation {
         def monitor(
             dut: ReadPath,
             controllerClock: ClockDomain,
-            queue: Queue[BigInt]
+            queue: Queue[Seq[BigInt]]
         ) = {
             while (true) {
                 controllerClock.waitRisingEdge()
@@ -289,11 +316,13 @@ object ReadPathSimulation {
         def readToggle(
             dut: ReadPath,
             controllerClock: ClockDomain,
-            queue: Queue[BigInt]
+            queue: Queue[Seq[BigInt]]
         ) = {
             while (true) {
                 val rand = new scala.util.Random
-                var buffer = BigInt(dut.parameters.burstLength * dut.parameters.device.DQ_BITS, rand)
+                var buffer = Seq.fill(dut.parameters.dqParallel) {
+                    BigInt(dut.parameters.burstLength * dut.parameters.device.DQ_BITS, rand)
+                }
 
                 controllerClock.waitRisingEdge()
 
@@ -304,15 +333,15 @@ object ReadPathSimulation {
             }
         }
 
-        val driveQueue = Queue[BigInt]()
-        val verifyQueue = Queue[BigInt]()
+        val driveQueue = Queue[Seq[BigInt]]()
+        val verifyQueue = Queue[Seq[BigInt]]()
 
         dut.clockDomain.forkStimulus(frequency = HertzNumber(400000000))
         dut.clockDomain.waitRisingEdge()
         sleep(1875)
         dut.controllerClockDomain.forkStimulus(frequency = HertzNumber(200000000))
 
-        dut.io.device.dq.read #= 0
+        dut.io.device.dq.foreach(_.read #= 0)
         dut.io.internal.readToggle #= false
 
         dut.clockDomain.waitSampling(200)

@@ -7,7 +7,8 @@ case class DDR3Parameters (
     density: String = "den4096Mb",
     speedGrade: String = "sg187E",
     width: String = "x16",
-    rank: String = "SINGLE_RANK",
+    rank: String = "DUAL_RANK",
+    dqBusWidth: Int = 32,
     tCKPeriod: Double = 2.5,
     controllerClockRatio: Int = 2,
     burstLength: Int = 8,
@@ -26,7 +27,7 @@ case class DDR3Parameters (
 
     val additiveLatency = if (device.TRCD.tCKCycles(tCKPeriod) == 0) 0
                           else if (device.TRCD.tCKCycles(tCKPeriod) < readLatency - 1) readLatency - 2
-                          else if (device.TRCD.tCKCycles(tCKPeriod) > readLatency) readLatency - 1
+                          else if (device.TRCD.tCKCycles(tCKPeriod) >= readLatency) readLatency - 1
                           else device.TRCD.tCKCycles(tCKPeriod)
 
     assert(additiveLatency == 0 || additiveLatency == readLatency - 1 || additiveLatency == readLatency - 2)
@@ -38,6 +39,10 @@ case class DDR3Parameters (
         case CLMinus1 => "CL - 1"
         case CLMinus2 => "CL - 2"
     }
+
+    assert(dqBusWidth % device.DQ_BITS == 0)
+
+    val dqParallel = dqBusWidth / device.DQ_BITS
 }
 
 case class PS (
@@ -53,5 +58,5 @@ case class TCK (
 ) {
     def tCKCycles(tCKPeriod: Double) = Math.ceil(value).toInt - 1
 
-    def clockCycles(clockMultiplier: Double) = Math.ceil(value * clockMultiplier).toInt - 1
+    def clockCycles(clockMultiplier: Double) = Math.ceil(value / clockMultiplier).toInt - 1
 }
