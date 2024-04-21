@@ -11,11 +11,12 @@ case class DDR3Parameters (
     dqBusWidth: Int = 32,
     tCKPeriod: Double = 2.5,
     controllerClockRatio: Int = 2,
+    ckClockRatio: Int = 2,
     burstLength: Int = 8,
     writeLatency: Int = 5,
     readLatency: Int = 6
 ) {
-    assert(controllerClockRatio == 2)
+    assert(ckClockRatio == 2)
     assert(burstLength == 4 || burstLength == 8)
 
     val device: DDR3DeviceParameters = DDR3DeviceParameters(

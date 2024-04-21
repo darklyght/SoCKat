@@ -35,7 +35,7 @@ case class PHY (
     }
 
     val clockGenerator = MMCME2_ADV(MMCME2_ADVParameters(
-        clkIn1Period = (2 * parameters.tCKPeriod).toInt,
+        clkIn1Period = (parameters.ckClockRatio * parameters.tCKPeriod).toInt,
         clkFbOutMultF = 8,
         clkOut0DivideF = 2,
         clkOut1Divide = 2,
@@ -47,7 +47,7 @@ case class PHY (
 
     val dqsClockGenerator = ClockGenerator(ClockGeneratorParameters(
         mmcm = MMCME2_ADVParameters(
-            clkIn1Period = (2 * parameters.tCKPeriod).toInt,
+            clkIn1Period = (parameters.ckClockRatio * parameters.tCKPeriod).toInt,
             clkFbOutMultF = 8,
             clkOut0DivideF = 2,
             clkOut1Divide = 2,

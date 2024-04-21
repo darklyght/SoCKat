@@ -6,7 +6,7 @@ import spinal.core.sim._
 import spinal.lib.fsm._
 import spinal.lib.bus.amba4.axi._
 
-import sockat.models._
+import sockat.models
 import sockat.utilities._
 
 import scala.collection.mutable.Map
@@ -27,7 +27,7 @@ case class Controller (
         ))
     }
 
-    val clockPeriod = parameters.controllerClockRatio * parameters.tCKPeriod
+    val clockPeriod = parameters.ckClockRatio * parameters.tCKPeriod
 
     val commandToggle = Reg(Bool()) init(False)
     val readToggle = Reg(Bool()) init(False)
@@ -191,7 +191,7 @@ case class Controller (
     val writeResponse = ShiftRegister(
         ShiftRegisterParameters(
             dataType = Bool(),
-            width = (parameters.writeLatency + parameters.additiveLatency) / parameters.controllerClockRatio + 1,
+            width = (parameters.writeLatency + parameters.additiveLatency) / parameters.ckClockRatio + 1,
             inputWidth = 1,
             resetFunction = (register: Bool) => {
                 register init(False)
@@ -1018,7 +1018,7 @@ case class Controller (
         ps: PS,
         tCK: TCK
     ) = {
-        ps.clockCycles(clockPeriod) max tCK.clockCycles(parameters.controllerClockRatio)
+        ps.clockCycles(clockPeriod) max tCK.clockCycles(parameters.ckClockRatio)
     }
 
     def modeRegisterWrite(
@@ -1145,7 +1145,7 @@ case class ControllerDDR3 (
 
     val model = Seq.fill(parameters.device.RANKS) {
         Seq.fill(parameters.dqParallel) {
-            ddr3(parameters)
+            models.ddr3(parameters)
         }
     }
     val controller = Controller(parameters)
@@ -1263,7 +1263,18 @@ object ControllerSimulation {
                     val items = data.dequeue()
 
                     items.zipWithIndex.foreach({case (item, index) => {
-                        waitUntil(dut.io.axiSlave.w.ready.toBoolean)
+                        var count = 0
+                        while (!dut.io.axiSlave.w.ready.toBoolean) {
+                            dut.clockDomain.waitFallingEdge()
+
+                            if (index == 0 && count == 0) {
+                                dut.io.axiSlave.aw.valid #= false
+                                dut.io.axiSlave.aw.payload.addr #= 0
+                                dut.io.axiSlave.aw.payload.len #= 0
+                            }
+
+                            count = count + 1
+                        }
 
                         dut.io.axiSlave.w.valid #= true
                         dut.io.axiSlave.w.payload.data #= item
@@ -1275,7 +1286,7 @@ object ControllerSimulation {
 
                         dut.clockDomain.waitFallingEdge()
 
-                        if (index == 0) {
+                        if (index == 0 && count == 0) {
                             dut.io.axiSlave.aw.valid #= false
                             dut.io.axiSlave.aw.payload.addr #= 0
                             dut.io.axiSlave.aw.payload.len #= 0
@@ -1341,7 +1352,7 @@ object ControllerSimulation {
 
         dut.clockDomain.waitSampling()
 
-        (0 until 100).foreach(i => {
+        (0 until 200).foreach(i => {
             val address = BigInt(10, rand)
             val length = BigInt(8, rand) + 1
 
@@ -1353,7 +1364,7 @@ object ControllerSimulation {
 
         // waitUntil(dut.io.axiSlave.b.valid.toBoolean)
 
-        (0 until 100).foreach(i => {
+        (0 until 200).foreach(i => {
             val address = BigInt(10, rand)
             val length = BigInt(8, rand) + 1
 
@@ -1361,7 +1372,7 @@ object ControllerSimulation {
             readLength.enqueue(length)
         })
 
-        dut.clockDomain.waitSampling(50000)
+        dut.clockDomain.waitSampling(200000)
     }
 
     def main(

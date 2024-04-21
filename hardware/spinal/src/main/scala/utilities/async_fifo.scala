@@ -18,8 +18,8 @@ case class AsyncFIFO[T <: Data] (
     parameters: AsyncFIFOParameters[T]
 ) extends Component {
     val io = new Bundle {
-        val enqueue = slave(Stream(parameters.dataType()))
-        val dequeue = master(Stream(parameters.dataType()))
+        val enqueue = slave(Stream(parameters.dataType())) addTag(crossClockDomain)
+        val dequeue = master(Stream(parameters.dataType())) addTag(crossClockDomain)
     }
 
     val enqueueReset = if (parameters.enqueueClockDomain.config.resetActiveLevel == HIGH) parameters.enqueueClockDomain.readResetWire else ~parameters.enqueueClockDomain.readResetWire
