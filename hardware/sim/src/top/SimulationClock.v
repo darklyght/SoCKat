@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module Clock #(
+module SimulationClock #(
     parameter PERIOD = 10,
     parameter PHASE = 0
 ) (

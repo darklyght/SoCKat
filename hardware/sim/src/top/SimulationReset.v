@@ -1,4 +1,4 @@
-module Reset #(
+module SimulationReset #(
     parameter CYCLES = 1
 ) (
     input clk,
