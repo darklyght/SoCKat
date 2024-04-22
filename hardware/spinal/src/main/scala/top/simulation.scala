@@ -65,22 +65,21 @@ case class Simulation (
         )
     }
 
-    val uartClockArea = new ClockingArea(uartClockDomain) {
-        val uartTransactor = UARTTransactor(
-            parameters = UARTTransactorParameters(
-                vpiParameters = UARTVPIParameters(
-                    name = "uart0"
-                ),
-                uartParameters = UARTParameters(
-                    clockFrequency = 117964800,
-                    baudRate = 7372800
-                )
+    val uartTransactor = UARTTransactor(
+        parameters = UARTTransactorParameters(
+            vpiParameters = UARTVPIParameters(
+                name = "uart0"
+            ),
+            uartParameters = UARTParameters(
+                clockFrequency = 117964800,
+                baudRate = 7372800
             )
-        )
-    }
+        ),
+        uartClockDomain = uartClockDomain
+    )
 
-    topClockArea.top.io.uart.transmit <> uartClockArea.uartTransactor.io.serial.receive
-    topClockArea.top.io.uart.receive <> uartClockArea.uartTransactor.io.serial.transmit
+    topClockArea.top.io.uart.transmit <> uartTransactor.io.serial.receive
+    topClockArea.top.io.uart.receive <> uartTransactor.io.serial.transmit
 }
 
 object SimulationVerilog {

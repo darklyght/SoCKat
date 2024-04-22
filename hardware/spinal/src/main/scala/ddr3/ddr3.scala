@@ -14,7 +14,12 @@ import scala.collection.mutable.Queue
 import scala.util.Random
 
 case class DDR3 (
-    parameters: DDR3Parameters
+    parameters: DDR3Parameters,
+    controllerClockDomain: ClockDomain,
+    ckClockDomain: ClockDomain,
+    readClockDomain: ClockDomain,
+    writeClockDomain: ClockDomain,
+    dqsClockDomain: ClockDomain
 ) extends Component {
     val io = new Bundle {
         val device = Device(parameters)
@@ -25,52 +30,26 @@ case class DDR3 (
                 idWidth = 8
             )
         ))
+        val readPhaseUpdate = master(PhaseShiftInterface())
+        val dqsPhaseUpdate = master(PhaseShiftInterface())
     }
-
-    val clockGenerator = MMCME2_ADV(MMCME2_ADVParameters(
-        clkIn1Period = (parameters.controllerClockRatio * parameters.ckClockRatio * parameters.tCKPeriod).toInt,
-        clkFbOutMultF = 8,
-        clkOut0DivideF = 4,
-        divClkDivide = 1
-    ))
-
-    clockGenerator.noPhaseShift()
-    clockGenerator.noDynamicReconfiguration()
-    clockGenerator.io.clkIn1 := ClockDomain.current.readClockWire
-    clockGenerator.io.clkIn2 := False
-    clockGenerator.io.clkInSel := 1
-    clockGenerator.io.clkFbIn := clockGenerator.io.clkFbOut
-    clockGenerator.io.rst := ClockDomain.current.readResetWire
-    clockGenerator.io.pwrDwn := False
-
-    val controllerResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
-    controllerResetSynchronizer.io.clock := clockGenerator.io.clkOut0
-    controllerResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
-
-    val systemClockDomain = ClockDomain.current
-
-    val controllerClockDomain = ClockDomain(
-        clock = clockGenerator.io.clkOut0,
-        reset = controllerResetSynchronizer.io.sync,
-        clockEnable = True,
-        config = ClockDomainConfig(
-            clockEdge = RISING,
-            resetKind = ASYNC,
-            resetActiveLevel = HIGH,
-            clockEnableActiveLevel = HIGH
-        )
-    )
 
     val controllerClockArea = new ClockingArea(controllerClockDomain) {
         val controller = Controller(parameters)
-        val phy = PHY(parameters)
+        val phy = PHY(
+            parameters = parameters,
+            ckClockDomain = ckClockDomain,
+            readClockDomain = readClockDomain,
+            writeClockDomain = writeClockDomain,
+            dqsClockDomain = dqsClockDomain
+        )
     }
 
     val arFIFO = AsyncFIFO(
         AsyncFIFOParameters(
             dataType = Axi4Ar(io.axiSlave.config),
             addressWidth = 2,
-            enqueueClockDomain = systemClockDomain,
+            enqueueClockDomain = ClockDomain.current,
             dequeueClockDomain = controllerClockDomain
         )
     )
@@ -80,7 +59,7 @@ case class DDR3 (
             dataType = Axi4R(io.axiSlave.config),
             addressWidth = 2,
             enqueueClockDomain = controllerClockDomain,
-            dequeueClockDomain = systemClockDomain
+            dequeueClockDomain = ClockDomain.current
         )
     )
 
@@ -88,7 +67,7 @@ case class DDR3 (
         AsyncFIFOParameters(
             dataType = Axi4Aw(io.axiSlave.config),
             addressWidth = 2,
-            enqueueClockDomain = systemClockDomain,
+            enqueueClockDomain = ClockDomain.current,
             dequeueClockDomain = controllerClockDomain
         )
     )
@@ -97,7 +76,7 @@ case class DDR3 (
         AsyncFIFOParameters(
             dataType = Axi4W(io.axiSlave.config),
             addressWidth = 2,
-            enqueueClockDomain = systemClockDomain,
+            enqueueClockDomain = ClockDomain.current,
             dequeueClockDomain = controllerClockDomain
         )
     )
@@ -107,7 +86,7 @@ case class DDR3 (
             dataType = Axi4B(io.axiSlave.config),
             addressWidth = 2,
             enqueueClockDomain = controllerClockDomain,
-            dequeueClockDomain = systemClockDomain
+            dequeueClockDomain = ClockDomain.current
         )
     )
 
@@ -129,9 +108,11 @@ case class DDR3 (
     controllerClockArea.phy.io.internal <> controllerClockArea.controller.io.phy
     
     io.device <> controllerClockArea.phy.io.device
+    io.readPhaseUpdate <> controllerClockArea.controller.io.readPhaseUpdate
+    io.dqsPhaseUpdate <> controllerClockArea.controller.io.dqsPhaseUpdate
 }
 
-case class DDR3DDR3 (
+case class DDR3SimulationModel (
     parameters: DDR3Parameters
 ) extends Component {
     val io = new Bundle {
@@ -144,14 +125,141 @@ case class DDR3DDR3 (
         ))
     }
 
+    val clockGenerator = MMCME2_ADV(MMCME2_ADVParameters(
+        clkIn1Period = (parameters.controllerClockRatio * parameters.ckClockRatio * parameters.tCKPeriod).toInt,
+        clkFbOutMultF = 8,
+        clkOut0DivideF = 4,
+        clkOut1Divide = 2,
+        clkOut2Divide = 2,
+        clkOut2UseFinePs = "TRUE",
+        clkOut3Divide = 2,
+        clkOut3Phase = 270,
+        divClkDivide = 1
+    ))
+
+    clockGenerator.noDynamicReconfiguration()
+
+    clockGenerator.io.clkIn1 := ClockDomain.current.readClockWire
+    clockGenerator.io.clkIn2 := False
+    clockGenerator.io.clkInSel := 1
+    clockGenerator.io.clkFbIn := clockGenerator.io.clkFbOut
+    clockGenerator.io.rst := ClockDomain.current.readResetWire
+    clockGenerator.io.pwrDwn := False
+
+    val dqsClockGenerator = MMCME2_ADV(MMCME2_ADVParameters(
+        clkIn1Period = (parameters.controllerClockRatio * parameters.ckClockRatio * parameters.tCKPeriod).toInt,
+        clkFbOutMultF = 8,
+        clkOut0DivideF = 2,
+        clkOut0UseFinePs = "TRUE",
+        divClkDivide = 1
+    ))
+
+    dqsClockGenerator.noDynamicReconfiguration()
+
+    dqsClockGenerator.io.clkIn1 := ClockDomain.current.readClockWire
+    dqsClockGenerator.io.clkIn2 := False
+    dqsClockGenerator.io.clkInSel := 1
+    dqsClockGenerator.io.clkFbIn := dqsClockGenerator.io.clkFbOut
+    dqsClockGenerator.io.rst := ClockDomain.current.readResetWire
+    dqsClockGenerator.io.pwrDwn := False
+
+    val controllerResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    controllerResetSynchronizer.io.clock := clockGenerator.io.clkOut0
+    controllerResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
+
+    val ckResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    ckResetSynchronizer.io.clock := clockGenerator.io.clkOut1
+    ckResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
+
+    val readResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    readResetSynchronizer.io.clock := clockGenerator.io.clkOut2
+    readResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
+
+    val writeResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    writeResetSynchronizer.io.clock := clockGenerator.io.clkOut3
+    writeResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
+
+    val dqsResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    dqsResetSynchronizer.io.clock := dqsClockGenerator.io.clkOut0
+    dqsResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~dqsClockGenerator.io.locked
+
+    val controllerClockDomain = ClockDomain(
+        clock = clockGenerator.io.clkOut0,
+        reset = controllerResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+    
+    val ckClockDomain = ClockDomain(
+        clock = clockGenerator.io.clkOut1,
+        reset = ckResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+    
+    val readClockDomain = ClockDomain(
+        clock = clockGenerator.io.clkOut2,
+        reset = readResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+
+    val writeClockDomain = ClockDomain(
+        clock = clockGenerator.io.clkOut3,
+        reset = writeResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+
+    val dqsClockDomain = ClockDomain(
+        clock = dqsClockGenerator.io.clkOut0,
+        reset = dqsResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+
     val model = Seq.fill(parameters.device.RANKS) {
         Seq.fill(parameters.dqParallel) {
             models.ddr3(parameters)
         }
     }
-    val ddr3 = DDR3(parameters)
+    val ddr3 = DDR3(
+        parameters = parameters,
+        controllerClockDomain = controllerClockDomain,
+        ckClockDomain = ckClockDomain,
+        readClockDomain = readClockDomain,
+        writeClockDomain = writeClockDomain,
+        dqsClockDomain = dqsClockDomain
+    )
 
     ddr3.io.axiSlave <> io.axiSlave
+    clockGenerator.io.phaseShift <> ddr3.io.readPhaseUpdate
+    dqsClockGenerator.io.phaseShift <> ddr3.io.dqsPhaseUpdate
 
     val ranks = 0 until parameters.device.RANKS
     val chips = 0 until parameters.dqParallel
@@ -189,17 +297,64 @@ object DDR3Verilog {
                 vcdPath = "wave.fst"
             )
         ).generate(
-            DDR3(DDR3Parameters())
+            DDR3(
+                parameters = DDR3Parameters(),
+                controllerClockDomain = ClockDomain.external(
+                    name = "controllerClock",
+                    config = ClockDomainConfig(
+                        clockEdge = RISING,
+                        resetKind = ASYNC,
+                        resetActiveLevel = HIGH,
+                        clockEnableActiveLevel = HIGH
+                    )
+                ),
+                ckClockDomain = ClockDomain.external(
+                    name = "ckClock",
+                    config = ClockDomainConfig(
+                        clockEdge = RISING,
+                        resetKind = ASYNC,
+                        resetActiveLevel = HIGH,
+                        clockEnableActiveLevel = HIGH
+                    )
+                ),
+                readClockDomain = ClockDomain.external(
+                    name = "readClock",
+                    config = ClockDomainConfig(
+                        clockEdge = RISING,
+                        resetKind = ASYNC,
+                        resetActiveLevel = HIGH,
+                        clockEnableActiveLevel = HIGH
+                    )
+                ),
+                writeClockDomain = ClockDomain.external(
+                    name = "writeClock",
+                    config = ClockDomainConfig(
+                        clockEdge = RISING,
+                        resetKind = ASYNC,
+                        resetActiveLevel = HIGH,
+                        clockEnableActiveLevel = HIGH
+                    )
+                ),
+                dqsClockDomain = ClockDomain.external(
+                    name = "dqsClock",
+                    config = ClockDomainConfig(
+                        clockEdge = RISING,
+                        resetKind = ASYNC,
+                        resetActiveLevel = HIGH,
+                        clockEnableActiveLevel = HIGH
+                    )
+                )
+            )
         )
     }
 }
 
 object DDR3Simulation {
     def test(
-        dut: DDR3DDR3
+        dut: DDR3SimulationModel
     ) = {
         def read(
-            dut: DDR3DDR3,
+            dut: DDR3SimulationModel,
             address: Queue[BigInt],
             length: Queue[BigInt],
             readDataAddress: Queue[BigInt]
@@ -224,13 +379,13 @@ object DDR3Simulation {
         }
 
         def readData(
-            dut: DDR3DDR3,
+            dut: DDR3SimulationModel,
             readDataAddress: Queue[BigInt],
             model: Map[BigInt, BigInt]
         ) = {
             while (true) {
                 if (!readDataAddress.isEmpty && dut.io.axiSlave.r.valid.toBoolean) {
-                    println(readDataAddress)
+                    // println(readDataAddress)
                     if (model.contains(readDataAddress(0))) {
                         assert(
                             model.getOrElse(readDataAddress(0), BigInt(0)) == dut.io.axiSlave.r.payload.data.toBigInt,
@@ -245,7 +400,7 @@ object DDR3Simulation {
         }
 
         def write(
-            dut: DDR3DDR3,
+            dut: DDR3SimulationModel,
             address: Queue[BigInt],
             data: Queue[Seq[BigInt]],
             writeAddressData: Queue[Queue[(BigInt, BigInt)]]
@@ -307,7 +462,7 @@ object DDR3Simulation {
         }
 
         def writeResponse(
-            dut: DDR3DDR3,
+            dut: DDR3SimulationModel,
             writeAddressData: Queue[Queue[(BigInt, BigInt)]],
             model: Map[BigInt, BigInt]
         ) = {
@@ -316,7 +471,7 @@ object DDR3Simulation {
                     val data = writeAddressData.dequeue()
 
                     data.foreach({case (address, value) => {
-                        printf("%x %x\n", address, value)
+                        // printf("%x %x\n", address, value)
                         model.remove(address)
                         model.put(address, value)
                     }})
@@ -386,7 +541,7 @@ object DDR3Simulation {
                                 .addSimulatorFlag("-s glbl")
                                 .addIncludeDir("../sim/lib/DDR3_SDRAM_Verilog_Model")
                                 .compile(
-                                    DDR3DDR3(DDR3Parameters(
+                                    DDR3SimulationModel(DDR3Parameters(
                                         synthesis = false
                                     ))
                                 )

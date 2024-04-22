@@ -1,9 +1,13 @@
 package sockat.top
 
 import spinal.core._
+import spinal.lib._
+import spinal.core.sim._
 
 import sockat.primitives._
+import sockat.transactors._
 import sockat.uart._
+import sockat.utilities._
 
 case class Top (
     parameters: TopParameters
@@ -45,15 +49,89 @@ case class Top (
         )
     )
 
-    val uartClockArea = new ClockingArea(uartClockDomain) {
-        val uart = UART(
-            parameters = parameters.uartParameters
-        )
+    val uart = UART(
+        parameters = parameters.uartParameters,
+        uartClockDomain = uartClockDomain
+    )
 
-        uart.io.data.transmit <-/< uart.io.data.receive
+    uart.io.data.transmit <-/< uart.io.data.receive
+
+    io.uart <> uart.io.serial
+}
+
+case class TopSimulationModel (
+    parameters: TopParameters
+) extends Component {
+    val topClock = SimulationClock(
+        parameters = SimulationClockParameters(
+            period = 10,
+            phase = 0
+        )
+    )
+
+    val uartClock = SimulationClock(
+        parameters = SimulationClockParameters(
+            period = 8.477,
+            phase = 0
+        )
+    )
+
+    val reset = SimulationReset(
+        parameters = SimulationResetParameters(
+            cycles = 100
+        )
+    )
+
+    reset.io.clk := topClock.io.clk
+
+    val uartResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    uartResetSynchronizer.io.clock := uartClock.io.clk
+    uartResetSynchronizer.io.async := reset.io.reset
+
+    val topClockDomain = ClockDomain(
+        clock = topClock.io.clk,
+        reset = reset.io.reset,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+
+    val uartClockDomain = ClockDomain(
+        clock = uartClock.io.clk,
+        reset = uartResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+
+
+    val topClockArea = new ClockingArea(topClockDomain) {
+        val top = Top(parameters)
+
+        val uartTransactor = UARTTransactor(
+            parameters = UARTTransactorParameters(
+                vpiParameters = UARTVPIParameters(
+                    name = "uart0"
+                ),
+                uartParameters = UARTParameters(
+                    clockFrequency = 117964800,
+                    baudRate = 7372800
+                )
+            ),
+            uartClockDomain = uartClockDomain
+        )
     }
 
-    io.uart <> uartClockArea.uart.io.serial
+    topClockArea.top.io.uart.transmit <> topClockArea.uartTransactor.io.serial.receive
+    topClockArea.top.io.uart.receive <> topClockArea.uartTransactor.io.serial.transmit
 }
 
 object TopVerilog {
@@ -69,6 +147,31 @@ object TopVerilog {
             )
         ).generate(
             Top(TopParameters())
+        )
+    }
+}
+
+object TopSimulation {
+    def main(
+        args: Array[String]
+    ) = {
+        val compiled = SpinalConfig(
+            mode = Verilog,
+            targetDirectory = "../src/hdl/top/",
+            dumpWave = DumpWaveConfig(
+                depth = 0,
+                vcdPath = "wave.fst"
+            )
+        ).generate(
+            TopSimulationModel(
+                TopParameters(
+                    clockFrequency = 100000000,
+                    uartParameters = UARTParameters(
+                        clockFrequency = 117964800,
+                        baudRate = 7372800
+                    )
+                )
+            )
         )
     }
 }

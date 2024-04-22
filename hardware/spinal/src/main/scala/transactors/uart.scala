@@ -26,11 +26,14 @@ case class UARTVPI (
         })
     }
 
-    mapCurrentClockDomain(io.clk)
-
     noIoPrefix()
 
     addPrePopTask(() => renameIO())
+
+    addRTLPath("../sim/transactors/uart/hdl/UARTVPI.v")
+    addRTLPath("../sim/transactors/uart/src/uart.c")
+    addRTLPath("../sim/transactors/uart/src/receive.c")
+    addRTLPath("../sim/transactors/uart/src/transmit.c")
 }
 
 case class UARTTransactorParameters (
@@ -39,15 +42,20 @@ case class UARTTransactorParameters (
 )
 
 case class UARTTransactor (
-    parameters: UARTTransactorParameters
+    parameters: UARTTransactorParameters,
+    uartClockDomain: ClockDomain
 ) extends Component {
     val io = new Bundle {
         val serial = UARTSerial()
     }
 
     val vpi = UARTVPI(parameters.vpiParameters)
-    val uart = UART(parameters.uartParameters)
+    val uart = UART(
+        parameters = parameters.uartParameters,
+        uartClockDomain = uartClockDomain
+    )
 
+    vpi.io.clk := ClockDomain.current.readClockWire
     uart.io.data <> vpi.io.data
     io.serial <> uart.io.serial
 }

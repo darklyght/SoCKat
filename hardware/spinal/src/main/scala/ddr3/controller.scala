@@ -7,6 +7,7 @@ import spinal.lib.fsm._
 import spinal.lib.bus.amba4.axi._
 
 import sockat.models
+import sockat.primitives._
 import sockat.utilities._
 
 import scala.collection.mutable.Map
@@ -25,6 +26,8 @@ case class Controller (
                 idWidth = 8
             )
         ))
+        val readPhaseUpdate = master(PhaseShiftInterface())
+        val dqsPhaseUpdate = master(PhaseShiftInterface())
     }
 
     val clockPeriod = parameters.ckClockRatio * parameters.tCKPeriod
@@ -56,12 +59,13 @@ case class Controller (
     io.phy.write.writeMask.foreach(_ := 0)
     io.phy.write.writeLevelingEnable := False
     io.phy.write.writeLevelingToggle := writeLevelingToggle
-    io.phy.readPhaseUpdate.clk := ClockDomain.current.readClockWire
-    io.phy.readPhaseUpdate.en := False
-    io.phy.readPhaseUpdate.incdec := False
-    io.phy.dqsPhaseUpdate.payload.clock := 0
-    io.phy.dqsPhaseUpdate.payload.increment := False
-    io.phy.dqsPhaseUpdate.valid := False
+
+    io.readPhaseUpdate.clk := ClockDomain.current.readClockWire
+    io.readPhaseUpdate.en := False
+    io.readPhaseUpdate.incdec := False
+    io.dqsPhaseUpdate.clk := ClockDomain.current.readClockWire
+    io.dqsPhaseUpdate.en := False
+    io.dqsPhaseUpdate.incdec := True
 
     commandToggle := io.phy.write.commandToggle
     readToggle := io.phy.read.readToggle
@@ -207,7 +211,7 @@ case class Controller (
     writeResponse.io.input := Vec(True)
 
     val mainFsm = new StateMachine {
-        val sWaitPhy = makeInstantEntry()
+        val sWaitMMCM = makeInstantEntry()
         val sInitialize = new StateFsm(fsm = initializationFsm())
         val sIdle = new State
         val sPrechargeAll = new State
@@ -250,14 +254,12 @@ case class Controller (
 
         refreshFIFO.io.dequeue.ready := False
 
-        sWaitPhy
+        sWaitMMCM
             .whenIsActive({
                 io.phy.deviceReset := True
                 io.phy.write.cke := False
                 refiTimer := setCounter(ps = PS(7800000), tCK = TCK(0))
-                when (io.phy.ready) {
-                    goto(sInitialize)
-                }
+                goto(sInitialize)
             })
 
         sInitialize
@@ -827,13 +829,13 @@ case class Controller (
 
         sUpdatePhase
             .onEntry({
-                io.phy.readPhaseUpdate.en := True
+                io.readPhaseUpdate.en := True
                 when (readCalibrationPhase === 3) {
-                    io.phy.readPhaseUpdate.incdec := True
+                    io.readPhaseUpdate.incdec := True
                 }
             })
             .whenIsActive({
-                when (io.phy.readPhaseUpdate.done) {
+                when (io.readPhaseUpdate.done) {
                     goto(sNext)
                 }
             })
@@ -870,10 +872,9 @@ case class Controller (
     }
 
     def writeLevelingFsm() = new StateMachine {
-        val writeLevelingData = Vec((0 until parameters.device.DQS_BITS).map(i => {
-            io.phy.write.writeLevelingData.reduce(_ | _)(i * 8).asUInt
-        }))
-        val writeLevelingByte = Reg(UInt(log2Up(parameters.device.DQS_BITS) bits)) init(0)
+        val writeLevelingData = (0 until parameters.device.DQS_BITS).map(i => {
+            io.phy.write.writeLevelingData.reduce(_ & _)(i * 8).asUInt
+        }).reduce(_ & _)
 
         val sSetMR1 = new State with EntryPoint
         val sODTOn = new State
@@ -882,7 +883,6 @@ case class Controller (
         val sCheckData = new State
         val sIncrementDelay = new State
         val sIncrementDelayWait = new State
-        val sNextByte = new State
         val sODTOff = new State
         val sResetMR1 = new State
 
@@ -953,28 +953,21 @@ case class Controller (
             .whenIsActive({
                 io.phy.write.writeLevelingEnable := True
                 io.phy.write.odt := True
-                when (writeLevelingData(writeLevelingByte) === 0) {
+                when (writeLevelingData === 0) {
                     goto(sIncrementDelay)
                 } .otherwise {
-                    when (writeLevelingByte === parameters.device.DQS_BITS - 1) {
-                        goto(sODTOff)
-                    } .otherwise {
-                        writeLevelingByte := writeLevelingByte + 1
-                        goto(sPulse)
-                    }
+                    goto(sODTOff)
                 }
             })
 
         sIncrementDelay
             .onEntry({
-                io.phy.dqsPhaseUpdate.payload.clock := writeLevelingByte.resized
-                io.phy.dqsPhaseUpdate.payload.increment := True
-                io.phy.dqsPhaseUpdate.valid := True
+                io.dqsPhaseUpdate.en := True
             })
             .whenIsActive({
                 io.phy.write.writeLevelingEnable := True
                 io.phy.write.odt := True
-                when (io.phy.dqsPhaseUpdate.ready) {
+                when (io.dqsPhaseUpdate.done) {
                     goto(sPulse)
                 }
             })
@@ -1130,7 +1123,7 @@ case class Controller (
     }
 }
 
-case class ControllerDDR3 (
+case class ControllerSimulationModel (
     parameters: DDR3Parameters
 ) extends Component {
     val io = new Bundle {
@@ -1148,8 +1141,119 @@ case class ControllerDDR3 (
             models.ddr3(parameters)
         }
     }
+
+    val clockGenerator = MMCME2_ADV(MMCME2_ADVParameters(
+        clkIn1Period = (parameters.ckClockRatio * parameters.tCKPeriod).toInt,
+        clkFbOutMultF = 8,
+        clkOut0DivideF = 2,
+        clkOut1Divide = 2,
+        clkOut1UseFinePs = "TRUE",
+        clkOut2Divide = 2,
+        clkOut2Phase = 270,
+        divClkDivide = 2
+    ))
+
+    clockGenerator.noDynamicReconfiguration()
+
+    clockGenerator.io.clkIn1 := ClockDomain.current.readClockWire
+    clockGenerator.io.clkIn2 := False
+    clockGenerator.io.clkInSel := 1
+    clockGenerator.io.clkFbIn := clockGenerator.io.clkFbOut
+    clockGenerator.io.rst := ClockDomain.current.readResetWire
+    clockGenerator.io.pwrDwn := False
+
+    val dqsClockGenerator = MMCME2_ADV(MMCME2_ADVParameters(
+        clkIn1Period = (parameters.ckClockRatio * parameters.tCKPeriod).toInt,
+        clkFbOutMultF = 8,
+        clkOut0DivideF = 2,
+        clkOut0UseFinePs = "TRUE",
+        divClkDivide = 2
+    ))
+
+    dqsClockGenerator.noDynamicReconfiguration()
+
+    dqsClockGenerator.io.clkIn1 := ClockDomain.current.readClockWire
+    dqsClockGenerator.io.clkIn2 := False
+    dqsClockGenerator.io.clkInSel := 1
+    dqsClockGenerator.io.clkFbIn := dqsClockGenerator.io.clkFbOut
+    dqsClockGenerator.io.rst := ClockDomain.current.readResetWire
+    dqsClockGenerator.io.pwrDwn := False
+
+    val ckResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    ckResetSynchronizer.io.clock := clockGenerator.io.clkOut0
+    ckResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
+
+    val readResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    readResetSynchronizer.io.clock := clockGenerator.io.clkOut1
+    readResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
+
+    val writeResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    writeResetSynchronizer.io.clock := clockGenerator.io.clkOut2
+    writeResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~clockGenerator.io.locked
+
+    val dqsResetSynchronizer = ResetSynchronizer(ResetSynchronizerParameters())
+    dqsResetSynchronizer.io.clock := dqsClockGenerator.io.clkOut0
+    dqsResetSynchronizer.io.async := ClockDomain.current.readResetWire || ~dqsClockGenerator.io.locked
+
+    val ckClockDomain = ClockDomain(
+        clock = clockGenerator.io.clkOut0,
+        reset = ckResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+    
+    val readClockDomain = ClockDomain(
+        clock = clockGenerator.io.clkOut1,
+        reset = readResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+
+    val writeClockDomain = ClockDomain(
+        clock = clockGenerator.io.clkOut2,
+        reset = writeResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+
+    val dqsClockDomain = ClockDomain(
+        clock = dqsClockGenerator.io.clkOut0,
+        reset = dqsResetSynchronizer.io.sync,
+        clockEnable = True,
+        config = ClockDomainConfig(
+            clockEdge = RISING,
+            resetKind = ASYNC,
+            resetActiveLevel = HIGH,
+            clockEnableActiveLevel = HIGH
+        )
+    )
+
     val controller = Controller(parameters)
-    val phy = PHY(parameters)
+    val phy = PHY(
+        parameters = parameters,
+        ckClockDomain = ckClockDomain,
+        readClockDomain = readClockDomain,
+        writeClockDomain = writeClockDomain,
+        dqsClockDomain = dqsClockDomain
+    )
+
+    clockGenerator.io.phaseShift <> controller.io.readPhaseUpdate
+    dqsClockGenerator.io.phaseShift <> controller.io.dqsPhaseUpdate
 
     controller.io.axiSlave <> io.axiSlave
     phy.io.internal <> controller.io.phy
@@ -1197,10 +1301,10 @@ object ControllerVerilog {
 
 object ControllerSimulation {
     def test(
-        dut: ControllerDDR3
+        dut: ControllerSimulationModel
     ) = {
         def read(
-            dut: ControllerDDR3,
+            dut: ControllerSimulationModel,
             address: Queue[BigInt],
             length: Queue[BigInt],
             readDataAddress: Queue[BigInt]
@@ -1225,7 +1329,7 @@ object ControllerSimulation {
         }
 
         def readData(
-            dut: ControllerDDR3,
+            dut: ControllerSimulationModel,
             readDataAddress: Queue[BigInt],
             model: Map[BigInt, BigInt]
         ) = {
@@ -1246,7 +1350,7 @@ object ControllerSimulation {
         }
 
         def write(
-            dut: ControllerDDR3,
+            dut: ControllerSimulationModel,
             address: Queue[BigInt],
             data: Queue[Seq[BigInt]],
             writeAddressData: Queue[Queue[(BigInt, BigInt)]]
@@ -1308,7 +1412,7 @@ object ControllerSimulation {
         }
 
         def writeResponse(
-            dut: ControllerDDR3,
+            dut: ControllerSimulationModel,
             writeAddressData: Queue[Queue[(BigInt, BigInt)]],
             model: Map[BigInt, BigInt]
         ) = {
@@ -1387,9 +1491,11 @@ object ControllerSimulation {
                                 .addSimulatorFlag("-s glbl")
                                 .addIncludeDir("../sim/lib/DDR3_SDRAM_Verilog_Model")
                                 .compile(
-                                    ControllerDDR3(DDR3Parameters(
-                                        synthesis = false
-                                    ))
+                                    ControllerSimulationModel(
+                                        parameters = DDR3Parameters(
+                                            synthesis = false
+                                        )
+                                    )
                                 )
 
         compiled.doSim(dut => test(dut))

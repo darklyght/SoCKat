@@ -42,7 +42,7 @@ case class WritePathInterface (
 
 case class WritePath (
     parameters: DDR3Parameters,
-    dqsClockDomains: Seq[ClockDomain]
+    dqsClockDomain: ClockDomain
 ) extends Component {
     val io = new Bundle {
         val device = master(DeviceInternal(parameters))
@@ -489,70 +489,70 @@ case class WritePath (
         }})
     }})
 
-    val dqsClockArea = dqsClockDomains.zipWithIndex.foreach({case (domain, index) => {
-        new ClockingArea(domain) {
-            val writeToggleSync = Vec.fill(3)(
-                Reg(Bool()) init(False) addTag(crossClockDomain)
+    val dqsClockArea = new ClockingArea(dqsClockDomain) {
+        val writeToggleSync = Vec.fill(3)(
+            Reg(Bool()) init(False) addTag(crossClockDomain)
+        )
+
+        val writeLevelingEnableSync = Vec.fill(4)(
+            Reg(Bool()) init(False) addTag(crossClockDomain)
+        )
+
+        val writeLevelingToggleSync = Vec.fill(4)(
+            Reg(Bool()) init(False) addTag(crossClockDomain)
+        )
+
+        writeToggleSync(2) := io.internal.writeToggle
+        writeToggleSync(1) := writeToggleSync(2)
+        writeToggleSync(0) := writeToggleSync(1)
+
+        writeLevelingEnableSync(3) := io.internal.writeLevelingEnable
+        writeLevelingEnableSync(2) := writeLevelingEnableSync(3)
+        writeLevelingEnableSync(1) := writeLevelingEnableSync(2)
+        writeLevelingEnableSync(0) := writeLevelingEnableSync(1)
+
+        writeLevelingToggleSync(3) := io.internal.writeLevelingToggle
+        writeLevelingToggleSync(2) := writeLevelingToggleSync(3)
+        writeLevelingToggleSync(1) := writeLevelingToggleSync(2)
+        writeLevelingToggleSync(0) := writeLevelingToggleSync(2) ^ writeLevelingToggleSync(1)
+
+        val dqsRise = Mux(writeLevelingEnableSync(1), writeLevelingToggleSync(0), True)
+
+        val dqsEnableSerializer = ShiftRegister(
+            ShiftRegisterParameters(
+                dataType = Bool(),
+                width = parameters.writeLatency + parameters.additiveLatency + parameters.burstLength / 2 + 2,
+                inputWidth = parameters.burstLength / 2 + 2,
+                resetFunction = (register: Bool) => {
+                    register init(False)
+                },
+                defaultFunction = (register: Bool) => {
+                    register := False
+                }
             )
+        )
 
-            val writeLevelingEnableSync = Vec.fill(4)(
-                Reg(Bool()) init(False) addTag(crossClockDomain)
+        val dqsOddr = ODDR(
+            ODDRParameters(
+                ddrClkEdge = "SAME_EDGE"
             )
+        )
 
-            val writeLevelingToggleSync = Vec.fill(4)(
-                Reg(Bool()) init(False) addTag(crossClockDomain)
-            )
+        dqsEnableSerializer.io.load := writeToggleSync(1) ^ writeToggleSync(0)
+        dqsEnableSerializer.io.shift := True
+        dqsEnableSerializer.io.input := Vec(True, parameters.burstLength / 2 + 2)
 
-            writeToggleSync(2) := io.internal.writeToggle
-            writeToggleSync(1) := writeToggleSync(2)
-            writeToggleSync(0) := writeToggleSync(1)
-
-            writeLevelingEnableSync(3) := io.internal.writeLevelingEnable
-            writeLevelingEnableSync(2) := writeLevelingEnableSync(3)
-            writeLevelingEnableSync(1) := writeLevelingEnableSync(2)
-            writeLevelingEnableSync(0) := writeLevelingEnableSync(1)
-
-            writeLevelingToggleSync(3) := io.internal.writeLevelingToggle
-            writeLevelingToggleSync(2) := writeLevelingToggleSync(3)
-            writeLevelingToggleSync(1) := writeLevelingToggleSync(2)
-            writeLevelingToggleSync(0) := writeLevelingToggleSync(2) ^ writeLevelingToggleSync(1)
-
-            val dqsRise = Mux(writeLevelingEnableSync(1), writeLevelingToggleSync(0), True)
-
-            val dqsEnableSerializer = ShiftRegister(
-                ShiftRegisterParameters(
-                    dataType = Bool(),
-                    width = parameters.writeLatency + parameters.additiveLatency + parameters.burstLength / 2 + 2,
-                    inputWidth = parameters.burstLength / 2 + 2,
-                    resetFunction = (register: Bool) => {
-                        register init(False)
-                    },
-                    defaultFunction = (register: Bool) => {
-                        register := False
-                    }
-                )
-            )
-
-            val dqsOddr = ODDR(
-                ODDRParameters(
-                    ddrClkEdge = "SAME_EDGE"
-                )
-            )
-
-            dqsEnableSerializer.io.load := writeToggleSync(1) ^ writeToggleSync(0)
-            dqsEnableSerializer.io.shift := True
-            dqsEnableSerializer.io.input := Vec(True, parameters.burstLength / 2 + 2)
-
-            dqsOddr.io.c := ClockDomain.current.readClockWire
-            dqsOddr.io.ce := True
-            dqsOddr.io.d1 := dqsRise
-            dqsOddr.io.d2 := False
-            dqsOddr.io.r := ClockDomain.current.readResetWire
-            dqsOddr.io.s := False
-            io.device.dqs(index).write := dqsOddr.io.q
-            io.device.dqs(index).writeEnable := writeLevelingEnableSync(0) | dqsEnableSerializer.io.output(0)
-        }
-    }})
+        dqsOddr.io.c := ClockDomain.current.readClockWire
+        dqsOddr.io.ce := True
+        dqsOddr.io.d1 := dqsRise
+        dqsOddr.io.d2 := False
+        dqsOddr.io.r := ClockDomain.current.readResetWire
+        dqsOddr.io.s := False
+        (0 until parameters.device.DQS_BITS).foreach(i => {
+            io.device.dqs.write(i) := dqsOddr.io.q
+            io.device.dqs.writeEnable(i) := (writeLevelingEnableSync(0) | dqsEnableSerializer.io.output(0))
+        })
+    }
 }
 
 object WritePathVerilog {
@@ -571,17 +571,15 @@ object WritePathVerilog {
         ).generate(
             WritePath(
                 parameters = parameters,
-                dqsClockDomains = (0 until parameters.dqParallel * parameters.device.DQS_BITS).map(i => {
-                    ClockDomain.external(
-                        name = "dqsClock" + i,
-                        config = ClockDomainConfig(
-                            clockEdge = RISING,
-                            resetKind = ASYNC,
-                            resetActiveLevel = HIGH,
-                            clockEnableActiveLevel = HIGH
-                        )
+                dqsClockDomain = ClockDomain.external(
+                    name = "dqsClock",
+                    config = ClockDomainConfig(
+                        clockEdge = RISING,
+                        resetKind = ASYNC,
+                        resetActiveLevel = HIGH,
+                        clockEnableActiveLevel = HIGH
                     )
-                })
+                )
             )
         )
     }
@@ -634,15 +632,15 @@ object WritePathSimulation {
 
         def monitor(
             dut: WritePath,
-            dqsClocks: Seq[ClockDomain],
+            dqsClock: ClockDomain,
             queue: Queue[Seq[BigInt]]
         ) = {
             while (true) {
                 if (!dut.io.device.command.we_n.toBoolean) {
-                    dqsClocks(0).waitRisingEdge(dut.parameters.writeLatency + dut.parameters.additiveLatency - 1)
+                    dqsClock.waitRisingEdge(dut.parameters.writeLatency + dut.parameters.additiveLatency - 1)
                     sleep(1)
                     assert(dut.io.device.dqs.writeEnable.toInt == (1 << dut.parameters.device.DQS_BITS) - 1)
-                    dqsClocks(0).waitRisingEdge()
+                    dqsClock.waitRisingEdge()
 
                     var buffer = ArrayBuffer.fill(dut.parameters.dqParallel) {
                         BigInt(0)
@@ -670,7 +668,7 @@ object WritePathSimulation {
                             buffer(chip) = buffer(chip) | (value(chip) << ((i * 2 + 1) * dut.parameters.device.DQ_BITS))
                         })
 
-                        dqsClocks(0).waitFallingEdge()
+                        dqsClock.waitFallingEdge()
 
                         dut.io.device.dq.foreach(dq => {
                             assert(dq.writeEnable.toBigInt == (BigInt(1) << dut.parameters.device.DQ_BITS) - 1)
@@ -691,12 +689,12 @@ object WritePathSimulation {
                             buffer(chip) = buffer(chip) | (value(chip) << ((i * 2) * dut.parameters.device.DQ_BITS))
                         })
 
-                        dqsClocks(0).waitRisingEdge()
+                        dqsClock.waitRisingEdge()
                     }
 
                     assert(buffer == queue.dequeue())
                 }
-                dqsClocks(0).waitSampling()
+                dqsClock.waitSampling()
             }
         }
 
@@ -705,9 +703,7 @@ object WritePathSimulation {
         dut.clockDomain.forkStimulus(frequency = HertzNumber(400000000))
         dut.clockDomain.waitRisingEdge()
         sleep(625)
-        dut.dqsClockDomains.foreach(clock => {
-            clock.forkStimulus(frequency = HertzNumber(400000000))
-        })
+        dut.dqsClockDomain.forkStimulus(frequency = HertzNumber(400000000))
         
         dut.io.internal.command.ras_n #= true
         dut.io.internal.command.cas_n #= true
@@ -722,7 +718,7 @@ object WritePathSimulation {
         dut.clockDomain.waitSampling(200)
 
         val driverThread = fork(driver(dut, queue))
-        val monitorThread = fork(monitor(dut, dut.dqsClockDomains, queue))
+        val monitorThread = fork(monitor(dut, dut.dqsClockDomain, queue))
 
         dut.clockDomain.waitSampling(10000)
     }
@@ -754,17 +750,15 @@ object WritePathSimulation {
                                     .compile(
                                         WritePath(
                                             parameters = parameters,
-                                            dqsClockDomains = (0 until parameters.device.DQS_BITS).map(i => {
-                                                ClockDomain.external(
-                                                    name = "dqsClock" + i,
-                                                    config = ClockDomainConfig(
-                                                        clockEdge = RISING,
-                                                        resetKind = ASYNC,
-                                                        resetActiveLevel = HIGH,
-                                                        clockEnableActiveLevel = HIGH
-                                                    )
+                                            dqsClockDomain = ClockDomain.external(
+                                                name = "dqsClock",
+                                                config = ClockDomainConfig(
+                                                    clockEdge = RISING,
+                                                    resetKind = ASYNC,
+                                                    resetActiveLevel = HIGH,
+                                                    clockEnableActiveLevel = HIGH
                                                 )
-                                            })
+                                            )
                                         )
                                     )
             

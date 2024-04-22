@@ -168,7 +168,7 @@ case class IOCells (
     }})
 }
 
-case class IOCellsDDR3 (
+case class IOCellsSimulationModel (
     parameters: DDR3Parameters
 ) extends Component {
     val io = new Bundle {
@@ -217,14 +217,14 @@ object IOCellsVerilog {
                 vcdPath = "wave.fst"
             )
         ).generate(
-            IOCellsDDR3(DDR3Parameters())
+            IOCellsSimulationModel(DDR3Parameters())
         )
     }
 }
 
 object IOCellsSimulation {
     def test(
-        dut: IOCellsDDR3
+        dut: IOCellsSimulationModel
     ) = {
     }
 
@@ -240,7 +240,7 @@ object IOCellsSimulation {
                                 .addSimulatorFlag("-s glbl")
                                 .addIncludeDir("../sim/lib/DDR3_SDRAM_Verilog_Model")
                                 .compile(
-                                    IOCellsDDR3(DDR3Parameters())
+                                    IOCellsSimulationModel(DDR3Parameters())
                                 )
 
         compiled.doSim(dut => test(dut))
