@@ -25,3 +25,28 @@ hardware/spinal/src/main/scala/ddr3/device_parameters.scala
 *.o
 *.vpi
 *.vvp
+
+# Vivado related
+.Xil/
+vivado*.jou
+vivado*.log
+program.log
+tight_setup_hold_pins.txt
+
+# Synthesis related
+syn.log
+post_synth_timing_summary.rpt
+post_synth_util.rpt
+post_synth.dcp
+
+# PnR related
+pnr.log
+post_imp_drc.rpt
+post_place_timing_summary.rpt
+post_place_util.rpt
+post_place.dcp
+post_route_power.rpt
+post_route_status.rpt
+post_route_timing_summary.rpt
+post_route.dcp
+*.bit

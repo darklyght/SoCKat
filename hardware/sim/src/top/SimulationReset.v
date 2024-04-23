@@ -15,6 +15,6 @@ module SimulationReset #(
         if (counter < CYCLES) counter <= counter + 1;
     end
 
-    assign reset = counter < CYCLES;
+    assign reset = counter >= CYCLES;
 
 endmodule
