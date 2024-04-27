@@ -102,7 +102,6 @@ for density in densities:
                                         executable = "/usr/bin/bash")
                 
                 for line in iter(process.stdout.readline, ""):
-                    print(line)
                     output.append(line.rstrip("\n"))
 
                 for line in output:

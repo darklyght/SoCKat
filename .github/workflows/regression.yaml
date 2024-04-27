@@ -16,7 +16,7 @@ jobs:
           echo "tag=$(date --date='yesterday' +'%Y-%m-%d')" >> $GITHUB_OUTPUT
           echo "date=$(date --date='yesterday' +'%Y%m%d')" >> $GITHUB_OUTPUT
       - name: Install dependencies
-        run: sudo apt-get install build-essential libboost-dev
+        run: sudo apt-get install build-essential libboost-dev iverilog
       - name: Checkout
         uses: actions/checkout@v4
         with:
