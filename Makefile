@@ -26,11 +26,11 @@ HARD_SYN_DCP = $(HARD_BUILD_DIRECTORY)/post_synth.dcp
 HARD_PNR_DCP = $(HARD_BUILD_DIRECTORY)/post_route.dcp
 HARD_BIT_FILE = $(HARD_BUILD_DIRECTORY)/top.bit
 
-SBT_BIN = /home/darklyght/.local/share/coursier/bin/sbt
-PYTHON3_BIN = /usr/bin/python3
-IVERILOG_BIN = /usr/local/bin/iverilog
-VVP_BIN = /usr/local/bin/vvp
-VIVADO_BIN = /tools/Xilinx/Vivado/2023.1/bin/vivado
+SBT_BIN = `which sbt`
+PYTHON3_BIN = `which python3`
+IVERILOG_BIN = `which iverilog`
+VVP_BIN = `which vvp`
+VIVADO_BIN = `which vivado`
 
 ddr3: $(HARD_DDR3_PARAMETERS)
 
@@ -49,7 +49,7 @@ simulation: $(HARD_SIM_VVP)
 	$(VVP_BIN) -n $(addprefix -M ,$(HARD_SIM_TRANSACTORS_DIRECTORY)) $(addprefix -m ,$(HARD_SIM_TRANSACTORS_LIST)) $(HARD_SIM_VVP)
 
 $(HARD_SIM_VVP): $(HARD_SRC_SIM_LIST) $(HARD_SIM_TRANSACTORS_DIRECTORY) $(HARD_SIM_SRC_LIST)
-	$(IVERILOG_BIN) -g2012 -o $(HARD_SIM_VVP) $(addprefix -y ,$(HARD_SIM_XILINX_LIB)) $(addprefix -y ,$(addsuffix hdl,$(HARD_SIM_TRANSACTORS_DIRECTORY))) $(HARD_SIM_SRC_LIST) $(HARD_SRC_SIM_LIST) $(HARD_SIM_XILINX_SRC)
+	$(IVERILOG_BIN) -g2012 -gno-io-range-error -o $(HARD_SIM_VVP) $(addprefix -y ,$(HARD_SIM_XILINX_LIB)) $(addprefix -y ,$(addsuffix hdl,$(HARD_SIM_TRANSACTORS_DIRECTORY))) $(HARD_SIM_SRC_LIST) $(HARD_SRC_SIM_LIST) $(HARD_SIM_XILINX_SRC)
 
 $(HARD_SRC_SIM_LIST): $(HARD_DDR3_PARAMETERS)
 	cd $(HARD_SPINAL_DIRECTORY) && $(SBT_BIN) "runMain sockat.top.TopSimulation"

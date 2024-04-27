@@ -269,6 +269,7 @@ object ClockGeneratorSimulation {
         val compiled = SimConfig.withIVerilog
                                 .withFstWave
                                 .addSimulatorFlag("-g2012")
+                                .addSimulatorFlag("-gno-io-range-error")
                                 .addSimulatorFlag("-s glbl")
                                 .compile(
                                     ClockGenerator(ClockGeneratorParameters(

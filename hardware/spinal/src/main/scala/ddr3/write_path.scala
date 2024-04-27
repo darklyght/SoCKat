@@ -745,6 +745,7 @@ object WritePathSimulation {
                                     .addSimulatorFlag("-D sg187E")
                                     .addSimulatorFlag("-D x16")
                                     .addSimulatorFlag("-g2012")
+                                    .addSimulatorFlag("-gno-io-range-error")
                                     .addSimulatorFlag("-s glbl")
                                     .addIncludeDir("../sim/lib/DDR3_SDRAM_Verilog_Model")
                                     .compile(
