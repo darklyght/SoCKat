@@ -37,6 +37,29 @@ ranks = [
     "SINGLE_RANK"
 ]
 
+parser = argparse.ArgumentParser()
+parser.add_argument("iverilog_bin")
+parser.add_argument("density")
+parser.add_argument("speed_grade")
+parser.add_argument("width")
+parser.add_argument("rank")
+args = parser.parse_args()
+
+if not os.path.exists(args.iverilog_bin):
+    raise ValueError("Invalid Icarus Verilog executable.")
+
+if args.density not in densities:
+    raise ValueError("Invalid density.")
+
+if args.speed_grade not in speed_grades:
+    raise ValueError("Invalid speed grade.")
+
+if args.width not in widths:
+    raise ValueError("Invalid width.")
+
+if args.rank not in ranks:
+    raise ValueError("Invalid rank.")
+
 values = {}
 
 for density in densities:
@@ -93,25 +116,6 @@ for density in densities:
                     
                     values[parameter]["value"][(density, speed_grade, width, rank)] = value
                     values[parameter]["unit"] = parameters[parameter]
-
-parser = argparse.ArgumentParser()
-parser.add_argument("density")
-parser.add_argument("speed_grade")
-parser.add_argument("width")
-parser.add_argument("rank")
-args = parser.parse_args()
-
-if args.density not in densities:
-    raise ValueError("Invalid density.")
-
-if args.speed_grade not in speed_grades:
-    raise ValueError("Invalid speed grade.")
-
-if args.width not in widths:
-    raise ValueError("Invalid width.")
-
-if args.rank not in ranks:
-    raise ValueError("Invalid rank.")
 
 result = {}
 
