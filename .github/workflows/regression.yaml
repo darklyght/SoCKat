@@ -17,10 +17,11 @@ jobs:
           echo "date=$(date --date='yesterday' +'%Y%m%d')" >> $GITHUB_OUTPUT
       - name: Install dependencies
         run: |
-          sudo apt-get install build-essential libboost-dev iverilog
+          sudo apt-get install build-essential libboost-dev
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          submodules: recursive
           path: SoCKat
       - name: Install sbt
         run: curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz | gzip -d > cs && chmod +x cs && ./cs setup -y
@@ -32,5 +33,5 @@ jobs:
         run: |
           source $GITHUB_WORKSPACE/oss-cad-suite/environment
           export CPLUS_INCLUDE_PATH=$GITHUB_WORKSPACE/oss-cad-suite/include/iverilog
-          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/oss-cad-suite/lib
+          export LIBRARY_PATH=$GITHUB_WORKSPACE/oss-cad-suite/lib
           make -C SoCKat ddr3 regression SBT_BIN=/usr/bin/sbt IVERILOG_BIN=$GITHUB_WORKSPACE/oss-cad-suite/bin/iverilog VVP_BIN=$GITHUB_WORKSPACE/oss-cad-suite/bin/vvp
