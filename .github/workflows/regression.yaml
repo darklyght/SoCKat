@@ -25,7 +25,8 @@ jobs:
         run: |
           wget https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${{ steps.date.outputs.tag }}/oss-cad-suite-linux-x64-${{ steps.date.outputs.date }}.tgz
           tar xzvf oss-cad-suite-linux-x64-${{ steps.date.outputs.date }}.tgz
-          source $GITHUB_WORKSPACE/oss-cad-suite/environment
+          export PATH="<extracted_location>/oss-cad-suite/bin:$PATH"
       - name: Launch regression
         run: |
+          source $GITHUB_WORKSPACE/oss-cad-suite/environment
           make -C SoCKat ddr3 regression SBT_BIN=/usr/bin/sbt IVERILOG_BIN=$GITHUB_WORKSPACE/oss-cad-suite/bin/iverilog VVP_BIN=$GITHUB_WORKSPACE/oss-cad-suite/bin/vvp
