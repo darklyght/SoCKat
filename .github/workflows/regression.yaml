@@ -32,4 +32,5 @@ jobs:
         run: |
           source $GITHUB_WORKSPACE/oss-cad-suite/environment
           export CPLUS_INCLUDE_PATH=$GITHUB_WORKSPACE/oss-cad-suite/include/iverilog
+          export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$GITHUB_WORKSPACE/oss-cad-suite/lib
           make -C SoCKat ddr3 regression SBT_BIN=/usr/bin/sbt IVERILOG_BIN=$GITHUB_WORKSPACE/oss-cad-suite/bin/iverilog VVP_BIN=$GITHUB_WORKSPACE/oss-cad-suite/bin/vvp
