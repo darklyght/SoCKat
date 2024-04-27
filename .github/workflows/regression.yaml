@@ -28,4 +28,4 @@ jobs:
           source $GITHUB_WORKSPACE/oss-cad-suite/environment
       - name: Launch regression
         run: |
-          make -C SoCKat ddr3 regression SBT_BIN=/usr/bin/sbt IVERILOG_BIN=$GITHUB_WORKSPACE/oss-cad-suite/bin/iverilog
+          make -C SoCKat ddr3 regression SBT_BIN=/usr/bin/sbt IVERILOG_BIN=$GITHUB_WORKSPACE/oss-cad-suite/bin/iverilog VVP_BIN=$GITHUB_WORKSPACE/oss-cad-suite/bin/vvp
