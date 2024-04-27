@@ -21,7 +21,7 @@ jobs:
       - name: Install iverilog
         run: |
           git clone https://github.com/steveicarus/iverilog.git
-          cd iverilog; git checkout --track -b v11-branch origin/v11-branch; git pull; sh autoconf.sh; ./configure; make -j `nproc`; make install
+          cd iverilog; git checkout --track -b v11-branch origin/v11-branch; git pull; sh autoconf.sh; ./configure; make -j `nproc`; sudo make install
       - name: Checkout
         uses: actions/checkout@v4
         with:
