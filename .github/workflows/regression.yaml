@@ -26,4 +26,4 @@ jobs:
           wget https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${{ steps.date.outputs.tag }}/oss-cad-suite-linux-x64-${{ steps.date.outputs.date }}.tgz
           tar xzvf oss-cad-suite-linux-x64-${{ steps.date.outputs.date }}.tgz
       - name: Launch regression
-        run: make -C SoCKat regression SBT_BIN=/usr/bin/sbt IVERILOG_BIN=
+        run: make -C SoCKat ddr3 regression SBT_BIN=/usr/bin/sbt IVERILOG_BIN=
