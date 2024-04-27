@@ -14,7 +14,7 @@ case class ODDR (
 ) extends BlackBox {
     addGeneric("DDR_CLK_EDGE", parameters.ddrClkEdge)
     addGeneric("INIT", parameters.init)
-    addGeneric("SRYTPE", parameters.srType)
+    addGeneric("SRTYPE", parameters.srType)
 
     val io = new Bundle {
         val q = out Bool()

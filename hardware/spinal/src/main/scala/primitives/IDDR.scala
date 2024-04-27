@@ -16,7 +16,7 @@ case class IDDR (
     addGeneric("DDR_CLK_EDGE", parameters.ddrClkEdge)
     addGeneric("INIT_Q1", parameters.initQ1)
     addGeneric("INIT_Q2", parameters.initQ2)
-    addGeneric("SRYTPE", parameters.srType)
+    addGeneric("SRTYPE", parameters.srType)
 
     val io = new Bundle {
         val q1 = out Bool()
