@@ -39,6 +39,7 @@ ranks = [
 
 parser = argparse.ArgumentParser()
 parser.add_argument("iverilog_bin")
+parser.add_argument("vvp_bin")
 parser.add_argument("density")
 parser.add_argument("speed_grade")
 parser.add_argument("width")
@@ -47,6 +48,9 @@ args = parser.parse_args()
 
 if not os.path.exists(args.iverilog_bin):
     raise ValueError("Invalid Icarus Verilog executable.")
+
+if not os.path.exists(args.vvp_bin):
+    raise ValueError("Invalid Icarus Verilog vvp executable.")
 
 if args.density not in densities:
     raise ValueError("Invalid density.")
@@ -89,7 +93,7 @@ for density in densities:
     for speed_grade in speed_grades:
         for width in widths:
             for rank in ranks:
-                process = subprocess.Popen(f"{args.iverilog_bin} -I {script_path}/../../../../../../sim/lib/DDR3_SDRAM_Verilog_Model -D {density} -D {speed_grade} -D {width} -D{rank} {script_path}/ddr3_parameter_generation.v -o {script_path}/ddr3_parameter_generation && vvp {script_path}/ddr3_parameter_generation",
+                process = subprocess.Popen(f"{args.iverilog_bin} -I {script_path}/../../../../../../sim/lib/DDR3_SDRAM_Verilog_Model -D {density} -D {speed_grade} -D {width} -D{rank} {script_path}/ddr3_parameter_generation.v -o {script_path}/ddr3_parameter_generation && {args.vvp_bin} {script_path}/ddr3_parameter_generation",
                                         stdout = subprocess.PIPE,
                                         stderr = subprocess.PIPE,
                                         bufsize = 1,
@@ -98,6 +102,7 @@ for density in densities:
                                         executable = "/usr/bin/bash")
                 
                 for line in iter(process.stdout.readline, ""):
+                    print(line)
                     output.append(line.rstrip("\n"))
 
                 for line in output:
