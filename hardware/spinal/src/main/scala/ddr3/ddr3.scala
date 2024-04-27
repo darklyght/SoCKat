@@ -507,7 +507,7 @@ object DDR3Simulation {
         dut.clockDomain.waitSampling()
 
         (0 until 1000).foreach(i => {
-            val address = BigInt(10, rand)
+            val address = BigInt(16, rand)
             val length = BigInt(8, rand) + 1
 
             val items = Seq.fill(length.toInt)(BigInt(dut.parameters.dqParallel * dut.parameters.burstLength * dut.parameters.device.DQ_BITS, rand))
@@ -519,7 +519,7 @@ object DDR3Simulation {
         // waitUntil(dut.io.axiSlave.b.valid.toBoolean)
 
         (0 until 1000).foreach(i => {
-            val address = BigInt(10, rand)
+            val address = BigInt(16, rand)
             val length = BigInt(8, rand) + 1
 
             readAddress.enqueue(address)

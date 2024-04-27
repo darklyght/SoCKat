@@ -1,0 +1,29 @@
+name: Regression
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current date
+        id: date
+        run: |
+          echo "tag=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
+          echo "tag=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: SoCKat
+      - name: Install sbt
+        run: curl -fL https://github.com/coursier/coursier/releases/latest/download/cs-x86_64-pc-linux.gz | gzip -d > cs && chmod +x cs && ./cs setup -y
+      - name: Get oss-cad-suite
+        run: |
+          wget https://github.com/YosysHQ/oss-cad-suite-build/releases/download/${{ steps.date.outputs.tag }}/oss-cad-suite-linux-x64-${{ steps.date.outputs.date }}.tgz
+          tar xzvf oss-cad-suite-linux-x64-${{ steps.date.outputs.date }}.tgz
+      - name: Launch regression
+        run: make -C SoCKat regression SBT_BIN=/usr/bin/sbt IVERILOG_BIN=
