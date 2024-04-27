@@ -27,6 +27,7 @@ HARD_PNR_DCP = $(HARD_BUILD_DIRECTORY)/post_route.dcp
 HARD_BIT_FILE = $(HARD_BUILD_DIRECTORY)/top.bit
 
 SBT_BIN = /home/darklyght/.local/share/coursier/bin/sbt
+PYTHON3_BIN = /usr/bin/python3
 IVERILOG_BIN = /usr/local/bin/iverilog
 VVP_BIN = /usr/local/bin/vvp
 VIVADO_BIN = /tools/Xilinx/Vivado/2023.1/bin/vivado
@@ -34,7 +35,7 @@ VIVADO_BIN = /tools/Xilinx/Vivado/2023.1/bin/vivado
 ddr3: $(HARD_DDR3_PARAMETERS)
 
 $(HARD_DDR3_PARAMETERS):
-	$(MAKE) -C $(HARD_SPINAL_DIRECTORY)/src/main/scala/ddr3/scripts DENSITY=$(HARD_DDR3_DENSITY) SPEEDGRADE=$(HARD_DDR3_SPEEDGRADE) WIDTH=$(HARD_DDR3_WIDTH) RANKS=$(HARD_DDR3_RANKS)
+	$(MAKE) -C $(HARD_SPINAL_DIRECTORY)/src/main/scala/ddr3/scripts PYTHON3_BIN=$(PYTHON3_BIN) DENSITY=$(HARD_DDR3_DENSITY) SPEEDGRADE=$(HARD_DDR3_SPEEDGRADE) WIDTH=$(HARD_DDR3_WIDTH) RANKS=$(HARD_DDR3_RANKS)
 
 regression: $(HARD_DDR3_PARAMETERS)
 	cd $(HARD_SPINAL_DIRECTORY) && $(SBT_BIN) "runMain sockat.top.Regression"
