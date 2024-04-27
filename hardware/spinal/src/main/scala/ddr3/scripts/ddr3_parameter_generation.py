@@ -89,7 +89,7 @@ for density in densities:
     for speed_grade in speed_grades:
         for width in widths:
             for rank in ranks:
-                process = subprocess.Popen(f"iverilog -I {script_path}/../../../../../../sim/lib/DDR3_SDRAM_Verilog_Model -D {density} -D {speed_grade} -D {width} -D{rank} {script_path}/ddr3_parameter_generation.v -o {script_path}/ddr3_parameter_generation && vvp {script_path}/ddr3_parameter_generation",
+                process = subprocess.Popen(f"{args.iverilog_bin} -I {script_path}/../../../../../../sim/lib/DDR3_SDRAM_Verilog_Model -D {density} -D {speed_grade} -D {width} -D{rank} {script_path}/ddr3_parameter_generation.v -o {script_path}/ddr3_parameter_generation && vvp {script_path}/ddr3_parameter_generation",
                                         stdout = subprocess.PIPE,
                                         stderr = subprocess.PIPE,
                                         bufsize = 1,
